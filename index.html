@@ -492,7 +492,7 @@ function drawMiniGauge(svgEl, value, max, color) {
   const filled = pct * circ;
   const gap = circ - filled;
   // Half circle path: left to right along top (counterclockwise from left)
-  const d = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
+  const d = `M ${cx - R} ${cy} A ${R} ${R} 0 0 0 ${cx + R} ${cy}`;
   // Pointer position
   const angle = Math.PI - pct * Math.PI; // 180deg -> 0deg as pct goes 0->1
   const px = cx + R * Math.cos(angle);
