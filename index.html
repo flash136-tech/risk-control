@@ -437,14 +437,31 @@
 </div>
 
 <script>
-const PROXY = 'https://api.allorigins.win/get?url=';
+const PROXIES = [
+  s => `https://api.allorigins.win/get?url=${encodeURIComponent(s)}`,
+  s => `https://corsproxy.io/?${encodeURIComponent(s)}`,
+  s => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(s)}`,
+];
+
 function yahooUrl(sym) {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=3mo`;
 }
+
 async function fetchYahoo(sym) {
-  const r = await fetch(PROXY + encodeURIComponent(yahooUrl(sym)));
-  const j = await r.json();
-  return JSON.parse(j.contents);
+  const url = yahooUrl(sym);
+  for (const proxyFn of PROXIES) {
+    try {
+      const r = await fetch(proxyFn(url), { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const text = await r.text();
+      // allorigins wraps in {contents:...}, others return raw
+      let parsed;
+      try { const j = JSON.parse(text); parsed = j.contents ? JSON.parse(j.contents) : j; }
+      catch(e) { parsed = JSON.parse(text); }
+      if (parsed?.chart?.result) return parsed;
+    } catch(e) { continue; }
+  }
+  throw new Error('All proxies failed for ' + sym);
 }
 
 // Timer
@@ -468,18 +485,14 @@ function setGauge(pct) {
 }
 
 function drawMiniGauge(svgEl, value, max, color) {
-  const pct = Math.min(value / max, 1);
-  const cx = 30, cy = 34, R = 24;
+  const pct = Math.min(Math.max(value / max, 0), 1);
+  const cx = 30, cy = 32, R = 22;
   const sx = cx + R * Math.cos(Math.PI), sy = cy + R * Math.sin(Math.PI);
   const ex = cx + R * Math.cos(0), ey = cy + R * Math.sin(0);
-  const angle = Math.PI + pct * Math.PI;
+  const angle = Math.PI - pct * Math.PI;
   const px = cx + R * Math.cos(angle), py = cy + R * Math.sin(angle);
   const large = pct > 0.5 ? 1 : 0;
-  svgEl.innerHTML = `
-    <path d="M ${sx} ${sy} A ${R} ${R} 0 1 1 ${ex} ${ey}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" stroke-linecap="round"/>
-    <path d="M ${sx} ${sy} A ${R} ${R} 0 ${large} 1 ${px} ${py}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="${px}" cy="${py}" r="3" fill="${color}"/>
-  `;
+  svgEl.innerHTML = `<path d="M ${sx} ${sy} A ${R} ${R} 0 1 1 ${ex} ${ey}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" stroke-linecap="round"/><path d="M ${sx} ${sy} A ${R} ${R} 0 ${large} 1 ${px} ${py}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/><circle cx="${px}" cy="${py}" r="3.5" fill="${color}"/>`;
 }
 
 function renderMiniGauges(d) {
