@@ -132,7 +132,7 @@
   .mini-gauges::-webkit-scrollbar { display: none; }
   .mini-gauge { flex: 0 0 80px; display: flex; flex-direction: column; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px 8px; gap: 6px; transition: border-color 0.3s; }
   .mini-gauge:hover { border-color: rgba(201,168,76,0.3); }
-  .mini-gauge-svg { width: 60px; height: 36px; }
+  .mini-gauge-svg { width: 60px; height: 42px; }
   .mini-gauge-label { font-size: 10px; color: var(--text2); text-align: center; letter-spacing: 0.5px; }
   .mini-gauge-value { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: center; }
   .vix-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-top: 4px; }
@@ -486,21 +486,27 @@ function setGauge(pct) {
 
 function drawMiniGauge(svgEl, value, max, color) {
   const pct = Math.min(Math.max(value / max, 0), 1);
-  // Use stroke-dasharray on a half-circle path — most reliable approach
-  const cx = 30, cy = 34, R = 22;
-  const circ = Math.PI * R; // half circumference
-  const filled = pct * circ;
-  const gap = circ - filled;
-  // Half circle path: left to right along top (counterclockwise from left)
-  const d = `M ${cx - R} ${cy} A ${R} ${R} 0 0 0 ${cx + R} ${cy}`;
-  // Pointer position
-  const angle = Math.PI - pct * Math.PI; // 180deg -> 0deg as pct goes 0->1
-  const px = cx + R * Math.cos(angle);
-  const py = cy - R * Math.sin(angle); // subtract because SVG y is flipped
+  const cx = 30, cy = 28, R = 18;
+  const C = 2 * Math.PI * R;       // full circumference
+  const half = C / 2;               // half = upper semicircle length
+  const filled = (pct * half).toFixed(2);
+  const empty  = (C - pct * half).toFixed(2);
+  const trackGap = half.toFixed(2); // hide lower half of track
+  // rotate(180) flips start from 3-o'clock to 9-o'clock, clockwise = upper semicircle
+  // Pointer: angle from left(pct=0) clockwise to right(pct=1) through top
+  const a  = Math.PI * (1 - pct);
+  const px = (cx + R * Math.cos(a)).toFixed(2);
+  const py = (cy - R * Math.sin(a)).toFixed(2);
+  svgEl.setAttribute('viewBox', '0 0 60 42');
   svgEl.innerHTML = `
-    <path d="${d}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" stroke-linecap="round"/>
-    <path d="${d}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="${filled} ${gap}" stroke-dashoffset="0"/>
+    <g transform="rotate(180 ${cx} ${cy})">
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="none"
+        stroke="rgba(255,255,255,0.1)" stroke-width="5"
+        stroke-dasharray="${trackGap} ${trackGap}"/>
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="none"
+        stroke="${color}" stroke-width="5" stroke-linecap="round"
+        stroke-dasharray="${filled} ${empty}"/>
+    </g>
     <circle cx="${px}" cy="${py}" r="3.5" fill="${color}"/>
   `;
 }
