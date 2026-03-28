@@ -486,13 +486,23 @@ function setGauge(pct) {
 
 function drawMiniGauge(svgEl, value, max, color) {
   const pct = Math.min(Math.max(value / max, 0), 1);
-  const cx = 30, cy = 32, R = 22;
-  const sx = cx + R * Math.cos(Math.PI), sy = cy + R * Math.sin(Math.PI);
-  const ex = cx + R * Math.cos(0), ey = cy + R * Math.sin(0);
-  const angle = Math.PI - pct * Math.PI;
-  const px = cx + R * Math.cos(angle), py = cy + R * Math.sin(angle);
-  const large = pct > 0.5 ? 1 : 0;
-  svgEl.innerHTML = `<path d="M ${sx} ${sy} A ${R} ${R} 0 1 1 ${ex} ${ey}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" stroke-linecap="round"/><path d="M ${sx} ${sy} A ${R} ${R} 0 ${large} 1 ${px} ${py}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/><circle cx="${px}" cy="${py}" r="3.5" fill="${color}"/>`;
+  // Use stroke-dasharray on a half-circle path — most reliable approach
+  const cx = 30, cy = 34, R = 22;
+  const circ = Math.PI * R; // half circumference
+  const filled = pct * circ;
+  const gap = circ - filled;
+  // Half circle path: left to right along top (counterclockwise from left)
+  const d = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
+  // Pointer position
+  const angle = Math.PI - pct * Math.PI; // 180deg -> 0deg as pct goes 0->1
+  const px = cx + R * Math.cos(angle);
+  const py = cy - R * Math.sin(angle); // subtract because SVG y is flipped
+  svgEl.innerHTML = `
+    <path d="${d}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" stroke-linecap="round"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="${filled} ${gap}" stroke-dashoffset="0"/>
+    <circle cx="${px}" cy="${py}" r="3.5" fill="${color}"/>
+  `;
 }
 
 function renderMiniGauges(d) {
