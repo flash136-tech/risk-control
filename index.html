@@ -587,8 +587,10 @@ async function loadUS() {
     const fg = Math.max(0, Math.min(100, 100 - vix*2.5 + (spyRsi-50)*0.5));
     const d = { vix, spy_rsi: spyRsi, fg, vol_ratio: volRatio,
       sentiment: Math.max(0, Math.min(100, 100-(vix/50*60)+(spyRsi-50)*0.4)) };
-    let rec = vix<15?80:vix<20?72:vix<25?60:vix<30?50:vix<35?38:28;
-    if (spyRsi>70) rec-=8; else if (spyRsi<35) rec+=8;
+    // Contrarian logic: high fear = good time to hold more, low fear = reduce
+    let rec = vix<15?40:vix<20?50:vix<25?62:vix<30?72:vix<35?80:88;
+    if (spyRsi>70) rec-=10; // overbought → reduce
+    else if (spyRsi<30) rec+=10; // oversold → add more
     rec = Math.max(20, Math.min(90, rec));
     setGauge(rec);
     const vixLabel = vix<20?'低度恐慌':vix<30?'中度恐慌':'高度恐慌';
@@ -639,8 +641,9 @@ async function loadTW() {
     const {upper, lower} = calcBollinger(closes, 20, 2);
     const bollPct = Math.max(0, Math.min(100, (curPrice-lower)/(upper-lower)*100));
     // Recommend: RSI-based for TW
-    let rec = twRsi<30?75:twRsi<40?65:twRsi<50?58:twRsi<60?50:twRsi<70?42:35;
-    rec = Math.max(20, Math.min(85, rec));
+    // Contrarian logic: oversold RSI = buy more, overbought = reduce
+    let rec = twRsi<30?82:twRsi<40?72:twRsi<50?60:twRsi<60?50:twRsi<70?40:32;
+    rec = Math.max(20, Math.min(88, rec));
     setGauge(rec);
     const rsiLabel = twRsi<40?'超賣偏低':twRsi>65?'超買偏高':'中性整理';
     document.getElementById('gaugeSub').textContent = `加權 RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
