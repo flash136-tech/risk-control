@@ -233,6 +233,45 @@
   .loading-dots::after { content: ''; animation: dots 1.5s infinite; }
   @keyframes dots { 0%,20%{content:''} 40%{content:'.'} 60%{content:'..'} 80%,100%{content:'...'} }
   .error-msg { display: none; background: var(--red-dim); border: 1px solid rgba(255,77,109,0.3); border-radius: 10px; padding: 12px 16px; font-size: 12px; color: var(--red); margin-top: 8px; }
+  /* Market toggle */
+  .market-toggle {
+    display: flex;
+    margin: 14px 0 4px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .mkt-btn {
+    flex: 1;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 1px;
+    font-family: 'Noto Sans TC', sans-serif;
+    border: none;
+    background: none;
+  }
+  .mkt-btn.active {
+    background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.12));
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,0.35);
+    text-shadow: 0 0 8px var(--gold-glow);
+  }
+  .mkt-label {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 1px;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -280,10 +319,15 @@
         </div>
       </div>
     </div>
+    <div class="market-toggle">
+      <button class="mkt-btn active" id="btnUS" onclick="switchMarket('us')">🇺🇸 美股市場</button>
+      <button class="mkt-btn" id="btnTW" onclick="switchMarket('tw')">🇹🇼 台股市場</button>
+    </div>
+    <div class="mkt-label" id="mktLabel">S&P500 · VIX · 恐貪指數</div>
     <div class="mini-gauges" id="miniGauges"></div>
     <div class="vix-section">
       <div class="vix-row">
-        <div class="vix-title">VIX 恐慌指數</div>
+        <div class="vix-title" id="vixTitle">VIX 恐慌指數</div>
         <div class="vix-badge mid" id="vixBadge">載入中</div>
       </div>
       <div class="signal-rows" id="signalRows"></div>
@@ -508,42 +552,24 @@ function drawMiniGauge(svgEl, value, max, color) {
   `;
 }
 
-function renderMiniGauges(d) {
-  const items = [
-    { label: 'VIX', value: d.vix, max: 50, color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
-    { label: '大盤RSI', value: d.spy_rsi, max: 100, color: d.spy_rsi>65?'#ff4d6d':d.spy_rsi<40?'#00d4aa':'#c9a84c', display: d.spy_rsi.toFixed(0) },
-    { label: '恐貪指數', value: d.fg, max: 100, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
-    { label: '量能比', value: Math.min(d.vol_ratio,3), max: 3, color: d.vol_ratio>1.5?'#c9a84c':'#8b9ab0', display: d.vol_ratio.toFixed(2)+'x' },
-    { label: '市場情緒', value: d.sentiment, max: 100, color: d.sentiment>60?'#c9a84c':d.sentiment<40?'#ff4d6d':'#8b9ab0', display: d.sentiment.toFixed(0) },
-  ];
-  document.getElementById('miniGauges').innerHTML = items.map((it,i) =>
-    `<div class="mini-gauge">
-      <svg class="mini-gauge-svg" id="mg${i}" viewBox="0 0 60 36"></svg>
-      <div class="mini-gauge-label">${it.label}</div>
-      <div class="mini-gauge-value" style="color:${it.color}">${it.display}</div>
-    </div>`
-  ).join('');
-  items.forEach((it,i) => drawMiniGauge(document.getElementById('mg'+i), it.value, it.max, it.color));
+// renderMiniGauges and renderSignals replaced by renderMiniGaugesItems/renderSignalsItems
+
+let currentMarket = 'us';
+
+function switchMarket(m) {
+  currentMarket = m;
+  document.getElementById('btnUS').classList.toggle('active', m==='us');
+  document.getElementById('btnTW').classList.toggle('active', m==='tw');
+  document.getElementById('mktLabel').textContent = m==='us'
+    ? 'S&P500 · VIX · 恐貪指數'
+    : '加權指數 · 台股RSI · 成交量比';
+  if (m==='us') loadUS(); else loadTW();
 }
 
-function renderSignals(d) {
-  const signals = [
-    { name: 'VIX 恐慌', value: Math.min(d.vix/50*100,100), color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
-    { name: '大盤RSI', value: d.spy_rsi, color: d.spy_rsi>65?'#ff4d6d':'#00d4aa', display: d.spy_rsi.toFixed(0) },
-    { name: '恐貪指數', value: d.fg, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
-    { name: '量能比值', value: Math.min(d.vol_ratio/3*100,100), color: '#c9a84c', display: d.vol_ratio.toFixed(2)+'x' },
-  ];
-  document.getElementById('signalRows').innerHTML = signals.map(s =>
-    `<div class="signal-row">
-      <div class="signal-dot" style="background:${s.color}"></div>
-      <div class="signal-name">${s.name}</div>
-      <div class="signal-bar-wrap"><div class="signal-bar" style="width:${s.value}%;background:${s.color}"></div></div>
-      <div class="signal-val">${s.display}</div>
-    </div>`
-  ).join('');
-}
+async function loadPage1() { loadUS(); }
 
-async function loadPage1() {
+async function loadUS() {
+  document.getElementById('vixTitle').textContent = 'VIX 恐慌指數';
   try {
     const spyData = await fetchYahoo('SPY');
     const chart = spyData.chart.result[0];
@@ -559,7 +585,8 @@ async function loadPage1() {
       vix = vc[vc.length-1];
     } catch(e) {}
     const fg = Math.max(0, Math.min(100, 100 - vix*2.5 + (spyRsi-50)*0.5));
-    const marketData = { vix, spy_rsi: spyRsi, fg, vol_ratio: volRatio, sentiment: Math.max(0,Math.min(100, 100-(vix/50*60)+(spyRsi-50)*0.4)) };
+    const d = { vix, spy_rsi: spyRsi, fg, vol_ratio: volRatio,
+      sentiment: Math.max(0, Math.min(100, 100-(vix/50*60)+(spyRsi-50)*0.4)) };
     let rec = vix<15?80:vix<20?72:vix<25?60:vix<30?50:vix<35?38:28;
     if (spyRsi>70) rec-=8; else if (spyRsi<35) rec+=8;
     rec = Math.max(20, Math.min(90, rec));
@@ -569,16 +596,98 @@ async function loadPage1() {
     const badge = document.getElementById('vixBadge');
     badge.textContent = `${vix.toFixed(1)} · ${vixLabel}`;
     badge.className = 'vix-badge ' + (vix<20?'low':vix<30?'mid':'high');
-    renderMiniGauges(marketData);
-    renderSignals(marketData);
+    const items = [
+      { label: 'VIX', value: d.vix, max: 50, color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
+      { label: '大盤RSI', value: d.spy_rsi, max: 100, color: d.spy_rsi>65?'#ff4d6d':d.spy_rsi<40?'#00d4aa':'#c9a84c', display: d.spy_rsi.toFixed(0) },
+      { label: '恐貪指數', value: d.fg, max: 100, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
+      { label: '量能比', value: Math.min(d.vol_ratio,3), max: 3, color: d.vol_ratio>1.5?'#c9a84c':'#8b9ab0', display: d.vol_ratio.toFixed(2)+'x' },
+      { label: '市場情緒', value: d.sentiment, max: 100, color: d.sentiment>60?'#c9a84c':d.sentiment<40?'#ff4d6d':'#8b9ab0', display: d.sentiment.toFixed(0) },
+    ];
+    renderMiniGaugesItems(items);
+    const signals = [
+      { name: 'VIX 恐慌', value: Math.min(d.vix/50*100,100), color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
+      { name: '大盤 RSI', value: d.spy_rsi, color: d.spy_rsi>65?'#ff4d6d':'#00d4aa', display: d.spy_rsi.toFixed(0) },
+      { name: '恐貪指數', value: d.fg, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
+      { name: '量能比值', value: Math.min(d.vol_ratio/3*100,100), color: '#c9a84c', display: d.vol_ratio.toFixed(2)+'x' },
+    ];
+    renderSignalsItems(signals);
   } catch(e) {
     document.getElementById('gaugeSub').textContent = '資料載入失敗，請稍後再試';
-    setGauge(65);
-    document.getElementById('gaugeVal').textContent = '65';
-    const fallback = {vix:18, spy_rsi:55, fg:55, vol_ratio:1.1, sentiment:55};
-    renderMiniGauges(fallback);
-    renderSignals(fallback);
+    setGauge(65); document.getElementById('gaugeVal').textContent='65';
   }
+}
+
+async function loadTW() {
+  document.getElementById('vixTitle').textContent = '台股大盤指標';
+  document.getElementById('vixBadge').textContent = '載入中';
+  document.getElementById('vixBadge').className = 'vix-badge mid';
+  document.getElementById('gaugeSub').textContent = '載入台股資料...';
+  try {
+    const twData = await fetchYahoo('^TWII');
+    const chart = twData.chart.result[0];
+    const closes = chart.indicators.quote[0].close.filter(v=>v!=null);
+    const volumes = chart.indicators.quote[0].volume.filter(v=>v!=null);
+    const twRsi = calcRSI(closes, 14);
+    const volAvg = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const volRatio = volumes[volumes.length-1]/volAvg;
+    // Taiwan TAIEX current price and 52-week range for position indicator
+    const curPrice = closes[closes.length-1];
+    const max52 = Math.max(...closes);
+    const min52 = Math.min(...closes);
+    const twPos = (curPrice - min52) / (max52 - min52) * 100; // 0~100%
+    // Bollinger %B as sentiment proxy
+    const {upper, lower} = calcBollinger(closes, 20, 2);
+    const bollPct = Math.max(0, Math.min(100, (curPrice-lower)/(upper-lower)*100));
+    // Recommend: RSI-based for TW
+    let rec = twRsi<30?75:twRsi<40?65:twRsi<50?58:twRsi<60?50:twRsi<70?42:35;
+    rec = Math.max(20, Math.min(85, rec));
+    setGauge(rec);
+    const rsiLabel = twRsi<40?'超賣偏低':twRsi>65?'超買偏高':'中性整理';
+    document.getElementById('gaugeSub').textContent = `加權 RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
+    const badge = document.getElementById('vixBadge');
+    badge.textContent = `RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
+    badge.className = 'vix-badge ' + (twRsi<40?'low':twRsi>65?'high':'mid');
+    const items = [
+      { label: '大盤RSI', value: twRsi, max: 100, color: twRsi>65?'#ff4d6d':twRsi<40?'#00d4aa':'#c9a84c', display: twRsi.toFixed(0) },
+      { label: '位階', value: twPos, max: 100, color: twPos>75?'#ff4d6d':twPos<30?'#00d4aa':'#c9a84c', display: twPos.toFixed(0)+'%' },
+      { label: '布林%B', value: bollPct, max: 100, color: bollPct>80?'#ff4d6d':bollPct<20?'#00d4aa':'#c9a84c', display: bollPct.toFixed(0) },
+      { label: '量能比', value: Math.min(volRatio,3), max: 3, color: volRatio>1.5?'#c9a84c':'#8b9ab0', display: volRatio.toFixed(2)+'x' },
+      { label: '市場位置', value: twPos, max: 100, color: twPos>70?'#ff4d6d':twPos<35?'#00d4aa':'#8b9ab0', display: twPos.toFixed(0) },
+    ];
+    renderMiniGaugesItems(items);
+    const signals = [
+      { name: '加權 RSI', value: twRsi, color: twRsi>65?'#ff4d6d':twRsi<40?'#00d4aa':'#c9a84c', display: twRsi.toFixed(0) },
+      { name: '指數位階', value: twPos, color: twPos>75?'#ff4d6d':twPos<30?'#00d4aa':'#c9a84c', display: twPos.toFixed(0)+'%' },
+      { name: '布林通道%B', value: bollPct, color: bollPct>80?'#ff4d6d':bollPct<20?'#00d4aa':'#c9a84c', display: bollPct.toFixed(0) },
+      { name: '量能比值', value: Math.min(volRatio/3*100,100), color: volRatio>1.5?'#c9a84c':'#8b9ab0', display: volRatio.toFixed(2)+'x' },
+    ];
+    renderSignalsItems(signals);
+  } catch(e) {
+    document.getElementById('gaugeSub').textContent = '台股資料載入失敗，請稍後再試';
+    setGauge(60); document.getElementById('gaugeVal').textContent='60';
+  }
+}
+
+function renderMiniGaugesItems(items) {
+  document.getElementById('miniGauges').innerHTML = items.map((it,i) =>
+    `<div class="mini-gauge">
+      <svg class="mini-gauge-svg" id="mg${i}" viewBox="0 0 44 26"></svg>
+      <div class="mini-gauge-label">${it.label}</div>
+      <div class="mini-gauge-value" style="color:${it.color}">${it.display}</div>
+    </div>`
+  ).join('');
+  items.forEach((it,i) => drawMiniGauge(document.getElementById('mg'+i), it.value, it.max, it.color));
+}
+
+function renderSignalsItems(signals) {
+  document.getElementById('signalRows').innerHTML = signals.map(s =>
+    `<div class="signal-row">
+      <div class="signal-dot" style="background:${s.color}"></div>
+      <div class="signal-name">${s.name}</div>
+      <div class="signal-bar-wrap"><div class="signal-bar" style="width:${s.value}%;background:${s.color}"></div></div>
+      <div class="signal-val">${s.display}</div>
+    </div>`
+  ).join('');
 }
 
 function calcRSI(closes, period) {
