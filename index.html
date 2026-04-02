@@ -587,10 +587,14 @@ async function loadUS() {
     const fg = Math.max(0, Math.min(100, 100 - vix*2.5 + (spyRsi-50)*0.5));
     const d = { vix, spy_rsi: spyRsi, fg, vol_ratio: volRatio,
       sentiment: Math.max(0, Math.min(100, 100-(vix/50*60)+(spyRsi-50)*0.4)) };
-    // Contrarian logic: high fear = good time to hold more, low fear = reduce
-    let rec = vix<15?40:vix<20?50:vix<25?62:vix<30?72:vix<35?80:88;
-    if (spyRsi>70) rec-=10; // overbought → reduce
-    else if (spyRsi<30) rec+=10; // oversold → add more
+    // Contrarian multi-factor: VIX base + RSI adj + Fear&Greed adj
+    // VIX base (反向：VIX越高→建議持股越高)
+    let vixScore = vix<12?32 : vix<15?40 : vix<18?50 : vix<22?60 : vix<27?70 : vix<32?78 : vix<40?84 : 88;
+    // RSI 修正
+    let rsiAdj = spyRsi<25?+10 : spyRsi<35?+6 : spyRsi>75?-10 : spyRsi>65?-6 : 0;
+    // 恐貪指數修正（極度恐慌→加碼，極度貪婪→減碼）
+    let fgAdj = fg<15?+8 : fg<25?+4 : fg>80?-8 : fg>70?-4 : 0;
+    let rec = Math.round(vixScore + rsiAdj + fgAdj);
     rec = Math.max(20, Math.min(90, rec));
     setGauge(rec);
     const vixLabel = vix<20?'低度恐慌':vix<30?'中度恐慌':'高度恐慌';
@@ -640,10 +644,22 @@ async function loadTW() {
     // Bollinger %B as sentiment proxy
     const {upper, lower} = calcBollinger(closes, 20, 2);
     const bollPct = Math.max(0, Math.min(100, (curPrice-lower)/(upper-lower)*100));
-    // Recommend: RSI-based for TW
-    // Contrarian logic: oversold RSI = buy more, overbought = reduce
-    let rec = twRsi<30?82:twRsi<40?72:twRsi<50?60:twRsi<60?50:twRsi<70?40:32;
-    rec = Math.max(20, Math.min(88, rec));
+    // Contrarian multi-factor scoring
+    // 1. RSI base score (反向：RSI越低→分數越高)
+    let rsiScore = twRsi<25?90 : twRsi<35?80 : twRsi<45?70 : twRsi<55?60 : twRsi<65?48 : twRsi<75?36 : 26;
+
+    // 2. 布林%B 修正（偏下軌→加碼，偏上軌→減碼）
+    let bollAdj = bollPct<20?+12 : bollPct<35?+6 : bollPct>80?-12 : bollPct>65?-6 : 0;
+
+    // 3. 位階修正（3個月低位→加碼，高位→減碼）
+    let posAdj = twPos<20?+10 : twPos<35?+5 : twPos>80?-10 : twPos>65?-5 : 0;
+
+    // 4. 日跌幅修正（大跌→逢低加碼機會）
+    const dayChange = closes.length>=2 ? (closes[closes.length-1]-closes[closes.length-2])/closes[closes.length-2]*100 : 0;
+    let dropAdj = dayChange < -2 ? +8 : dayChange < -1 ? +4 : dayChange > 2 ? -6 : dayChange > 1 ? -3 : 0;
+
+    let rec = Math.round(rsiScore + bollAdj + posAdj + dropAdj);
+    rec = Math.max(20, Math.min(90, rec));
     setGauge(rec);
     const rsiLabel = twRsi<40?'超賣偏低':twRsi>65?'超買偏高':'中性整理';
     document.getElementById('gaugeSub').textContent = `加權 RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
