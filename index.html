@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>風控運算 — 投資智能風控系統</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #070a0f;
+    --bg2: #0d1117;
+    --bg3: #111820;
+    --panel: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --gold: #c9a84c;
+    --gold2: #f0c96a;
+    --gold-glow: rgba(201,168,76,0.3);
+    --teal: #00d4aa;
+    --teal-dim: rgba(0,212,170,0.15);
+    --red: #ff4d6d;
+    --red-dim: rgba(255,77,109,0.15);
+    --text: #e8eaed;
+    --text2: #8b9ab0;
+    --text3: #4a5568;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(201,168,76,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(0,212,170,0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  .header {
+    padding: 20px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold-glow);
+  }
+  .logo span { color: var(--text2); font-weight: 400; font-size: 12px; display: block; letter-spacing: 2px; margin-top: 2px; }
+  .update-badge {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    text-align: center;
+  }
+  .update-badge .label { font-size: 9px; color: var(--text2); letter-spacing: 1px; }
+  .update-badge .timer { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: var(--gold); line-height: 1; }
+  .update-badge .unit { font-size: 8px; color: var(--text3); }
+  .tabs {
+    display: flex;
+    margin: 20px 20px 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+  }
+  .tab.active {
+    background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.1));
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,0.3);
+    text-shadow: 0 0 10px var(--gold-glow);
+  }
+  .page { display: none; padding: 16px 20px; }
+  .page.active { display: block; }
+
+  /* ===== PAGE 1 ===== */
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; padding: 20px 0 10px; }
+  .gauge-container { position: relative; width: 220px; height: 220px; }
+  .gauge-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge-track { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 12; }
+  .gauge-fill { fill: none; stroke: url(#gaugeGrad); stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 1.5s cubic-bezier(0.34,1.56,0.64,1); }
+  .gauge-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .gauge-label { font-size: 11px; color: var(--text2); letter-spacing: 1px; margin-bottom: 4px; }
+  .gauge-value { font-family: 'Orbitron', monospace; font-size: 52px; font-weight: 900; line-height: 1; color: var(--gold); text-shadow: 0 0 30px var(--gold-glow); animation: pulse-glow 3s ease-in-out infinite; }
+  .gauge-unit { font-family: 'Orbitron', monospace; font-size: 16px; color: var(--gold2); margin-top: 2px; }
+  .gauge-sub { font-size: 10px; color: var(--text3); margin-top: 6px; letter-spacing: 1px; }
+  @keyframes pulse-glow { 0%,100%{filter:drop-shadow(0 0 8px rgba(201,168,76,0.5))} 50%{filter:drop-shadow(0 0 20px rgba(201,168,76,0.8))} }
+  .mini-gauges { display: flex; gap: 8px; margin: 16px 0; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
+  .mini-gauges::-webkit-scrollbar { display: none; }
+  .mini-gauge { flex: 0 0 80px; display: flex; flex-direction: column; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px 8px; gap: 6px; transition: border-color 0.3s; }
+  .mini-gauge:hover { border-color: rgba(201,168,76,0.3); }
+  .mini-gauge-svg { width: 60px; height: 36px; }
+  .mini-gauge-label { font-size: 10px; color: var(--text2); text-align: center; letter-spacing: 0.5px; }
+  .mini-gauge-value { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: center; }
+  .vix-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-top: 4px; }
+  .vix-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .vix-title { font-size: 12px; color: var(--text2); letter-spacing: 1px; }
+  .vix-badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+  .vix-badge.low { background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(0,212,170,0.3); }
+  .vix-badge.mid { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid rgba(201,168,76,0.3); }
+  .vix-badge.high { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,109,0.3); }
+  .signal-rows { display: flex; flex-direction: column; gap: 8px; }
+  .signal-row { display: flex; align-items: center; gap: 10px; }
+  .signal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .signal-name { font-size: 12px; color: var(--text2); flex: 1; }
+  .signal-bar-wrap { flex: 2; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+  .signal-bar { height: 100%; border-radius: 2px; transition: width 1.2s ease; }
+  .signal-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); min-width: 36px; text-align: right; }
+
+  /* ===== PAGE 2 ===== */
+  .search-box { display: flex; gap: 8px; margin-bottom: 8px; }
+  .search-input { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--text); font-family: 'Noto Sans TC', sans-serif; font-size: 14px; outline: none; transition: border-color 0.3s; }
+  .search-input:focus { border-color: rgba(201,168,76,0.4); }
+  .search-input::placeholder { color: var(--text3); }
+  .search-btn { background: linear-gradient(135deg, var(--gold), #a07830); border: none; border-radius: 10px; padding: 12px 18px; color: #000; font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+  .search-btn:hover { opacity: 0.85; }
+  .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .input-hint { font-size: 10px; color: var(--text3); margin-bottom: 12px; }
+  .stock-header { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .stock-name-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .stock-name { font-size: 18px; font-weight: 700; }
+  .stock-symbol { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .stock-zone { padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+  .zone-value { background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(0,212,170,0.3); }
+  .zone-hot { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,109,0.3); }
+  .zone-neutral { background: var(--panel); color: var(--text2); border: 1px solid var(--border); }
+  .price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .stock-price { font-family: 'Orbitron', monospace; font-size: 32px; font-weight: 700; }
+  .price-change { font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+  .price-change.up { color: var(--teal); }
+  .price-change.down { color: var(--red); }
+  .stock-meta { display: flex; gap: 16px; font-size: 11px; color: var(--text2); flex-wrap: wrap; }
+  .stock-meta span { display: flex; gap: 4px; }
+  .stock-meta strong { color: var(--text); }
+  .indicators { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .indicator-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .indicator-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .indicator-name { font-size: 13px; font-weight: 500; }
+  .indicator-status { font-size: 11px; padding: 3px 8px; border-radius: 5px; font-weight: 600; }
+  .status-bull { background: var(--teal-dim); color: var(--teal); }
+  .status-bear { background: var(--red-dim); color: var(--red); }
+  .status-neutral { background: var(--panel); color: var(--text2); border: 1px solid var(--border); }
+  .chart-area { height: 80px; position: relative; overflow: hidden; }
+  .chart-svg { width: 100%; height: 100%; }
+  .indicator-values { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: var(--text2); flex-wrap: wrap; }
+  .indicator-values strong { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+  .vol-bars { display: flex; align-items: flex-end; height: 60px; gap: 3px; }
+  .vol-bar { flex: 1; border-radius: 2px 2px 0 0; }
+  .zone-summary { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; display: none; }
+  .zone-title { font-size: 12px; color: var(--text2); letter-spacing: 1px; margin-bottom: 10px; }
+  .zone-meter { height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+  .zone-meter-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+  .zone-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); }
+  .zone-desc { margin-top: 10px; font-size: 12px; color: var(--text2); line-height: 1.6; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; border-left: 2px solid var(--gold); }
+
+  /* ===== PAGE 3 ===== */
+  .asset-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .asset-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .asset-section-title { font-size: 14px; font-weight: 500; }
+  .asset-section-currency { font-size: 11px; color: var(--text2); }
+  .asset-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none; transition: border-color 0.3s; }
+  .asset-input:focus { border-color: rgba(201,168,76,0.4); }
+  .stock-entry { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .stock-entry input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none; transition: border-color 0.3s; }
+  .stock-entry input:focus { border-color: rgba(201,168,76,0.4); }
+  .stock-ticker { width: 90px; }
+  .stock-qty { width: 70px; }
+  .stock-price-input { flex: 1; min-width: 0; }
+  .remove-btn { background: none; border: 1px solid var(--border); color: var(--text3); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .remove-btn:hover { border-color: var(--red); color: var(--red); }
+  .add-btn { background: none; border: 1px dashed var(--border); color: var(--text2); width: 100%; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 12px; margin-top: 4px; transition: all 0.2s; font-family: 'Noto Sans TC', sans-serif; }
+  .add-btn:hover { border-color: rgba(201,168,76,0.4); color: var(--gold); }
+  .stock-entry-labels { display: flex; gap: 6px; margin-bottom: 4px; font-size: 10px; color: var(--text3); }
+  .lbl-ticker { width: 90px; } .lbl-qty { width: 70px; } .lbl-price { flex: 1; } .lbl-del { width: 28px; }
+  .calc-btn { width: 100%; background: linear-gradient(135deg, var(--gold), #a07830); border: none; border-radius: 12px; padding: 14px; color: #000; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 4px; letter-spacing: 1px; transition: opacity 0.2s; font-family: 'Noto Sans TC', sans-serif; }
+  .calc-btn:hover { opacity: 0.85; }
+  .result-panel { display: none; background: var(--panel); border: 1px solid rgba(201,168,76,0.2); border-radius: 16px; padding: 20px; margin-top: 12px; }
+  .result-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .result-row:last-of-type { border-bottom: none; }
+  .result-label { font-size: 12px; color: var(--text2); }
+  .result-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); font-weight: 600; }
+  .result-highlight { color: var(--gold); font-size: 18px; }
+  .recommendation-box { margin-top: 14px; padding: 14px; border-radius: 10px; border-left: 3px solid var(--gold); background: rgba(201,168,76,0.05); }
+  .rec-title { font-size: 11px; color: var(--text2); letter-spacing: 1px; margin-bottom: 6px; }
+  .rec-text { font-size: 13px; color: var(--text); line-height: 1.6; }
+
+  /* Shared */
+  .loading { display: none; text-align: center; padding: 20px; color: var(--text2); font-size: 12px; letter-spacing: 1px; animation: shimmer 1.5s infinite; }
+  @keyframes shimmer { 0%{opacity:0.4} 50%{opacity:1} 100%{opacity:0.4} }
+  .loading-dots::after { content: ''; animation: dots 1.5s infinite; }
+  @keyframes dots { 0%,20%{content:''} 40%{content:'.'} 60%{content:'..'} 80%,100%{content:'...'} }
+  .error-msg { display: none; background: var(--red-dim); border: 1px solid rgba(255,77,109,0.3); border-radius: 10px; padding: 12px 16px; font-size: 12px; color: var(--red); margin-top: 8px; }
+  /* Market toggle */
+  .market-toggle {
+    display: flex;
+    margin: 14px 0 4px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .mkt-btn {
+    flex: 1;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 1px;
+    font-family: 'Noto Sans TC', sans-serif;
+    border: none;
+    background: none;
+  }
+  .mkt-btn.active {
+    background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.12));
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,0.35);
+    text-shadow: 0 0 8px var(--gold-glow);
+  }
+  .mkt-label {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 1px;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  /* Optimizer tab */
+  .opt-section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .opt-section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .opt-section-sub { font-size: 11px; color: var(--text2); margin-bottom: 14px; line-height: 1.5; }
+  .opt-btn { width: 100%; background: linear-gradient(135deg, var(--gold), #a07830); border: none; border-radius: 12px; padding: 14px; color: #000; font-weight: 700; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: opacity 0.2s; font-family: "Noto Sans TC", sans-serif; }
+  .opt-btn:hover { opacity: 0.85; }
+  .opt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .opt-progress { display: none; margin: 12px 0; }
+  .opt-progress-bar-wrap { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+  .opt-progress-bar { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2)); border-radius: 3px; transition: width 0.3s ease; width: 0%; }
+  .opt-progress-text { font-size: 11px; color: var(--text2); text-align: center; letter-spacing: 1px; }
+  .opt-result { display: none; }
+  .opt-result-title { font-size: 11px; color: var(--text2); letter-spacing: 2px; margin-bottom: 10px; }
+  .opt-score-card { background: linear-gradient(135deg, rgba(201,168,76,0.1), rgba(201,168,76,0.05)); border: 1px solid rgba(201,168,76,0.25); border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .opt-score-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .opt-strategy-name { font-size: 13px; font-weight: 600; color: var(--gold); }
+  .opt-strategy-score { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--gold); font-weight: 700; }
+  .opt-params { display: flex; flex-direction: column; gap: 5px; }
+  .opt-param-row { display: flex; justify-content: space-between; font-size: 11px; }
+  .opt-param-label { color: var(--text2); }
+  .opt-param-val { font-family: "JetBrains Mono", monospace; color: var(--text); }
+  .opt-comparison { display: flex; gap: 8px; margin-bottom: 10px; }
+  .opt-cmp-box { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+  .opt-cmp-label { font-size: 10px; color: var(--text2); margin-bottom: 4px; letter-spacing: 1px; }
+  .opt-cmp-val { font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700; }
+  .opt-apply-btn { width: 100%; background: none; border: 1px solid rgba(201,168,76,0.4); border-radius: 10px; padding: 11px; color: var(--gold); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: "Noto Sans TC", sans-serif; letter-spacing: 1px; }
+  .opt-apply-btn:hover { background: rgba(201,168,76,0.1); }
+  .opt-applied-badge { display: none; text-align: center; padding: 8px; font-size: 12px; color: var(--teal); letter-spacing: 1px; }
+  .opt-log { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px; max-height: 160px; overflow-y: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--text2); line-height: 1.8; margin-top: 10px; display: none; }
+  .opt-market-sel { display: flex; gap: 6px; margin-bottom: 12px; }
+  .opt-market-btn { flex: 1; padding: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text2); font-size: 12px; cursor: pointer; text-align: center; transition: all 0.2s; font-family: "Noto Sans TC", sans-serif; }
+  .opt-market-btn.active { border-color: rgba(201,168,76,0.4); color: var(--gold); background: rgba(201,168,76,0.08); }
+  /* Optimize button */
+  .opt-trigger-btn {
+    width: 100%;
+    background: none;
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 12px;
+    padding: 13px;
+    color: var(--gold);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    font-family: 'Noto Sans TC', sans-serif;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .opt-trigger-btn:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.5); }
+  .opt-trigger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .opt-status-row { margin-top: 10px; }
+  .opt-status-bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+  .opt-status-bar { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2)); border-radius: 2px; transition: width 0.4s ease; }
+  .opt-status-text { font-size: 10px; color: var(--text3); text-align: center; letter-spacing: 1px; }
+  .opt-last-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; padding: 0 2px; }
+  #optLastTime { color: var(--text3); }
+  #optLastScore { color: var(--teal); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo">
+      風控運算
+      <span>RISK CONTROL SYSTEM</span>
+      <span style="font-size:10px;color:var(--gold);opacity:0.6;letter-spacing:1px;margin-top:2px;">v1.6.0</span>
+    </div>
+    <div class="update-badge">
+      <div class="label">更新倒數</div>
+      <div class="timer" id="timerDisplay">15:00</div>
+      <div class="unit">min &nbsp; sec</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">風控運算</div>
+    <div class="tab" onclick="switchTab(1)">個股分析</div>
+    <div class="tab" onclick="switchTab(2)">資產配置</div>
+
+  </div>
+
+  <!-- PAGE 1 -->
+  <div class="page active" id="page0">
+    <div class="gauge-wrap">
+      <div class="gauge-container">
+        <svg class="gauge-svg" viewBox="0 0 220 220">
+          <defs>
+            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#c9a84c"/>
+              <stop offset="100%" style="stop-color:#f0c96a"/>
+            </linearGradient>
+          </defs>
+          <circle class="gauge-track" cx="110" cy="110" r="90" stroke-dasharray="565"/>
+          <circle class="gauge-fill" id="gaugeFill" cx="110" cy="110" r="90" stroke-dasharray="565" stroke-dashoffset="565"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-label">持股配置建議</div>
+          <div class="gauge-value" id="gaugeVal">—</div>
+          <div class="gauge-unit">%</div>
+          <div class="gauge-sub" id="gaugeSub">載入中...</div>
+        </div>
+      </div>
+    </div>
+    <div class="market-toggle">
+      <button class="mkt-btn active" id="btnUS" onclick="switchMarket('us')">🇺🇸 美股市場</button>
+      <button class="mkt-btn" id="btnTW" onclick="switchMarket('tw')">🇹🇼 台股市場</button>
+    </div>
+    <div class="mkt-label" id="mktLabel">S&P500 · VIX · 恐貪指數</div>
+    <div class="mini-gauges" id="miniGauges"></div>
+    <div class="vix-section">
+      <div class="vix-row">
+        <div class="vix-title" id="vixTitle">VIX 恐慌指數</div>
+        <div class="vix-badge mid" id="vixBadge">載入中</div>
+      </div>
+      <div class="signal-rows" id="signalRows"></div>
+    </div>
+
+    <!-- Optimization Button -->
+    <div style="margin-top:14px;">
+      <button class="opt-trigger-btn" id="optTriggerBtn" onclick="runBackgroundOpt()">
+        ⚙ 執行參數優化
+      </button>
+      <div class="opt-status-row" id="optStatusRow" style="display:none">
+        <div class="opt-status-bar-wrap">
+          <div class="opt-status-bar" id="optStatusBar" style="width:0%"></div>
+        </div>
+        <div class="opt-status-text" id="optStatusText">準備中...</div>
+      </div>
+      <div class="opt-last-row" id="optLastRow" style="display:none">
+        <span id="optLastTime"></span>
+        <span id="optLastScore"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2 -->
+  <div class="page" id="page1">
+    <div class="search-box">
+      <input class="search-input" id="stockInput" type="text" placeholder="輸入代號，如 NVDA 或 2330"/>
+      <button class="search-btn" id="searchBtn" onclick="analyzeStock()">分析</button>
+    </div>
+    <div class="input-hint">台股輸入數字代號即可，美股輸入英文代號（如 NVDA、AAPL）</div>
+    <div class="loading" id="stockLoading"><span class="loading-dots">資料載入中</span></div>
+    <div class="error-msg" id="stockError"></div>
+    <div class="stock-header" id="stockHeader">
+      <div class="stock-name-row">
+        <div>
+          <div class="stock-name" id="sName">—</div>
+          <div class="stock-symbol" id="sSymbol">—</div>
+        </div>
+        <div class="stock-zone zone-neutral" id="sZone">—</div>
+      </div>
+      <div class="price-row">
+        <div class="stock-price" id="sPrice">—</div>
+        <div class="price-change" id="sChange">—</div>
+      </div>
+      <div class="stock-meta">
+        <span>開盤 <strong id="sOpen">—</strong></span>
+        <span>最高 <strong id="sHigh">—</strong></span>
+        <span>最低 <strong id="sLow">—</strong></span>
+        <span>昨收 <strong id="sPrev">—</strong></span>
+      </div>
+    </div>
+    <div class="indicators" id="indicators" style="display:none">
+      <div class="indicator-card">
+        <div class="indicator-top">
+          <div class="indicator-name">RSI（14日）</div>
+          <div class="indicator-status" id="rsiStatus">—</div>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" id="rsiChart" viewBox="0 0 300 80"></svg>
+        </div>
+        <div class="indicator-values">
+          <span>RSI <strong id="rsiVal">—</strong></span>
+          <span>超賣線 <strong style="color:var(--teal)">40</strong></span>
+          <span>超買線 <strong style="color:var(--red)">65</strong></span>
+        </div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-top">
+          <div class="indicator-name">布林通道（20日）</div>
+          <div class="indicator-status" id="bollStatus">—</div>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" id="bollChart" viewBox="0 0 300 80"></svg>
+        </div>
+        <div class="indicator-values">
+          <span>上軌 <strong id="bollUp">—</strong></span>
+          <span>中軌 <strong id="bollMid">—</strong></span>
+          <span>下軌 <strong id="bollDown">—</strong></span>
+        </div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-top">
+          <div class="indicator-name">成交量分析</div>
+          <div class="indicator-status" id="volStatus">—</div>
+        </div>
+        <div class="chart-area">
+          <div class="vol-bars" id="volBars"></div>
+        </div>
+        <div class="indicator-values">
+          <span>今日量 <strong id="volToday">—</strong></span>
+          <span>均量 <strong id="volAvg">—</strong></span>
+          <span>量比 <strong id="volRatio">—</strong></span>
+        </div>
+      </div>
+    </div>
+    <div class="zone-summary" id="zoneSummary">
+      <div class="zone-title">綜合區間判斷</div>
+      <div class="zone-meter">
+        <div class="zone-meter-fill" id="zoneMeterFill" style="width:50%"></div>
+      </div>
+      <div class="zone-labels">
+        <span>價值區</span><span>中性</span><span>升溫區</span>
+      </div>
+      <div class="zone-desc" id="zoneDesc">—</div>
+    </div>
+  </div>
+
+  <!-- PAGE 3 -->
+  <div class="page" id="page2">
+    <div class="asset-section">
+      <div class="asset-section-header">
+        <div class="asset-section-title">現金（台幣）</div>
+        <div class="asset-section-currency">TWD</div>
+      </div>
+      <input class="asset-input" id="cashTWD" type="number" placeholder="輸入台幣現金金額"/>
+    </div>
+    <div class="asset-section">
+      <div class="asset-section-header">
+        <div class="asset-section-title">現金（美元）</div>
+        <div class="asset-section-currency">USD</div>
+      </div>
+      <input class="asset-input" id="cashUSD" type="number" placeholder="輸入美元現金金額"/>
+    </div>
+    <div class="asset-section">
+      <div class="asset-section-header">
+        <div class="asset-section-title">台股持倉</div>
+        <div class="asset-section-currency">TWD</div>
+      </div>
+      <div class="stock-entry-labels">
+        <span class="lbl-ticker">代號</span>
+        <span class="lbl-qty">股數</span>
+        <span class="lbl-price">成本價</span>
+        <span class="lbl-del"></span>
+      </div>
+      <div id="twStocks"></div>
+      <button class="add-btn" onclick="addStock('tw')">＋ 新增台股</button>
+    </div>
+    <div class="asset-section">
+      <div class="asset-section-header">
+        <div class="asset-section-title">美股持倉</div>
+        <div class="asset-section-currency">USD</div>
+      </div>
+      <div class="stock-entry-labels">
+        <span class="lbl-ticker">代號</span>
+        <span class="lbl-qty">股數</span>
+        <span class="lbl-price">成本價</span>
+        <span class="lbl-del"></span>
+      </div>
+      <div id="usStocks"></div>
+      <button class="add-btn" onclick="addStock('us')">＋ 新增美股</button>
+    </div>
+    <div class="loading" id="calcLoading"><span class="loading-dots">計算中</span></div>
+    <div class="error-msg" id="calcError"></div>
+    <button class="calc-btn" onclick="calculatePortfolio()">計算持股水位</button>
+    <div class="result-panel" id="resultPanel">
+      <div class="result-row"><div class="result-label">台幣現金</div><div class="result-value" id="rCashTWD">—</div></div>
+      <div class="result-row"><div class="result-label">美元現金</div><div class="result-value" id="rCashUSD">—</div></div>
+      <div class="result-row"><div class="result-label">台股市值</div><div class="result-value" id="rTWVal">—</div></div>
+      <div class="result-row"><div class="result-label">美股市值</div><div class="result-value" id="rUSVal">—</div></div>
+      <div class="result-row"><div class="result-label">目前持股水位</div><div class="result-value result-highlight" id="rLevel">—</div></div>
+      <div class="result-row"><div class="result-label">建議持股水位</div><div class="result-value result-highlight" id="rSuggest">—</div></div>
+      <div class="recommendation-box">
+        <div class="rec-title">風控建議</div>
+        <div class="rec-text" id="rAdvice">—</div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+<script>
+const PROXIES = [
+  s => `https://api.allorigins.win/get?url=${encodeURIComponent(s)}`,
+  s => `https://corsproxy.io/?${encodeURIComponent(s)}`,
+  s => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(s)}`,
+];
+
+function yahooUrl(sym) {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=3mo`;
+}
+
+async function fetchYahoo(sym) {
+  const url = yahooUrl(sym);
+  for (const proxyFn of PROXIES) {
+    try {
+      const r = await fetch(proxyFn(url), { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const text = await r.text();
+      // allorigins wraps in {contents:...}, others return raw
+      let parsed;
+      try { const j = JSON.parse(text); parsed = j.contents ? JSON.parse(j.contents) : j; }
+      catch(e) { parsed = JSON.parse(text); }
+      if (parsed?.chart?.result) return parsed;
+    } catch(e) { continue; }
+  }
+  throw new Error('All proxies failed for ' + sym);
+}
+
+// Timer
+let timerSec = 15 * 60;
+setInterval(() => {
+  const m = Math.floor(timerSec / 60), s = timerSec % 60;
+  document.getElementById('timerDisplay').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  timerSec--;
+  if (timerSec < 0) { timerSec = 15 * 60; loadPage1(); }
+}, 1000);
+
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
+}
+
+function setGauge(pct) {
+  const offset = 565 - (565 * pct / 100);
+  document.getElementById('gaugeFill').style.strokeDashoffset = offset;
+  document.getElementById('gaugeVal').textContent = Math.round(pct);
+}
+
+function drawMiniGauge(svgEl, value, max, color) {
+  // Same method as the large gauge: circle + stroke-dashoffset + rotate
+  const pct = Math.min(Math.max(value / max, 0), 1);
+  const cx = 22, cy = 22, R = 16;
+  const C    = +(2 * Math.PI * R).toFixed(2); // full circumference ~100.5
+  const half = +(C / 2).toFixed(2);           // upper semicircle ~50.3
+  // Track: show only upper half (half visible, half hidden)
+  const trackDA  = `${half} ${half}`;
+  // Fill: pct of upper half filled, rest hidden
+  const fillLen  = +(pct * half).toFixed(2);
+  const fillDA   = `${fillLen} ${C - fillLen}`;
+  // rotate(180deg) around center → starts from 9-o'clock (left), goes clockwise through top
+  const rot = `rotate(180, ${cx}, ${cy})`;
+  svgEl.setAttribute('viewBox', `0 0 44 26`);
+  svgEl.innerHTML = `
+    <circle cx="${cx}" cy="${cx}" r="${R}" fill="none"
+      stroke="rgba(255,255,255,0.1)" stroke-width="5"
+      stroke-dasharray="${trackDA}" transform="${rot}"/>
+    <circle cx="${cx}" cy="${cx}" r="${R}" fill="none"
+      stroke="${color}" stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="${fillDA}" transform="${rot}"/>
+  `;
+}
+
+// renderMiniGauges and renderSignals replaced by renderMiniGaugesItems/renderSignalsItems
+
+let currentMarket = 'us';
+
+function switchMarket(m) {
+  currentMarket = m;
+  document.getElementById('btnUS').classList.toggle('active', m==='us');
+  document.getElementById('btnTW').classList.toggle('active', m==='tw');
+  document.getElementById('mktLabel').textContent = m==='us'
+    ? 'S&P500 · VIX · 恐貪指數'
+    : '加權指數 · 台股RSI · 成交量比';
+  if (m==='us') loadUS(); else loadTW();
+}
+
+async function loadPage1() { loadUS(); }
+
+async function loadUS() {
+  document.getElementById('vixTitle').textContent = 'VIX 恐慌指數';
+  try {
+    const spyData = await fetchYahoo('SPY');
+    const chart = spyData.chart.result[0];
+    const closes = chart.indicators.quote[0].close.filter(v=>v!=null);
+    const volumes = chart.indicators.quote[0].volume.filter(v=>v!=null);
+    const spyRsi = calcRSI(closes, 14);
+    const volAvg = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const volRatio = volumes[volumes.length-1]/volAvg;
+    let vix = 18;
+    try {
+      const vd = await fetchYahoo('^VIX');
+      const vc = vd.chart.result[0].indicators.quote[0].close.filter(v=>v!=null);
+      vix = vc[vc.length-1];
+    } catch(e) {}
+    const fg = Math.max(0, Math.min(100, 100 - vix*2.5 + (spyRsi-50)*0.5));
+    const d = { vix, spy_rsi: spyRsi, fg, vol_ratio: volRatio,
+      sentiment: Math.max(0, Math.min(100, 100-(vix/50*60)+(spyRsi-50)*0.4)) };
+    // Use optimized params if available, else default
+    const optUS = getOptParamsUS();
+    let rec;
+    if (optUS) {
+      // Apply optimizer-found thresholds
+      const {vL, vM, vH, rB, rS, mA} = optUS;
+      // VIX proxy: use rolling vol estimate from recent closes
+      const vixEst = vix; // use actual VIX
+      rec = vixEst < vL ? 32 : vixEst < vM ? 52 : vixEst < vH ? 68 : mA;
+      if (spyRsi < rB) rec += 8; if (spyRsi > rS) rec -= 8;
+      rec = Math.max(20, Math.min(mA, rec));
+    } else {
+      // Default contrarian multi-factor
+      let vixScore = vix<12?32 : vix<15?40 : vix<18?50 : vix<22?60 : vix<27?70 : vix<32?78 : vix<40?84 : 88;
+      let rsiAdj = spyRsi<25?+10 : spyRsi<35?+6 : spyRsi>75?-10 : spyRsi>65?-6 : 0;
+      let fgAdj  = fg<15?+8 : fg<25?+4 : fg>80?-8 : fg>70?-4 : 0;
+      rec = Math.round(vixScore + rsiAdj + fgAdj);
+      rec = Math.max(20, Math.min(90, rec));
+    }
+    setGauge(rec);
+    const vixLabel = vix<20?'低度恐慌':vix<30?'中度恐慌':'高度恐慌';
+    document.getElementById('gaugeSub').textContent = `VIX ${vix.toFixed(1)} · ${vixLabel}`;
+    const badge = document.getElementById('vixBadge');
+    badge.textContent = `${vix.toFixed(1)} · ${vixLabel}`;
+    badge.className = 'vix-badge ' + (vix<20?'low':vix<30?'mid':'high');
+    const items = [
+      { label: 'VIX', value: d.vix, max: 50, color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
+      { label: '大盤RSI', value: d.spy_rsi, max: 100, color: d.spy_rsi>65?'#ff4d6d':d.spy_rsi<40?'#00d4aa':'#c9a84c', display: d.spy_rsi.toFixed(0) },
+      { label: '恐貪指數', value: d.fg, max: 100, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
+      { label: '量能比', value: Math.min(d.vol_ratio,3), max: 3, color: d.vol_ratio>1.5?'#c9a84c':'#8b9ab0', display: d.vol_ratio.toFixed(2)+'x' },
+      { label: '市場情緒', value: d.sentiment, max: 100, color: d.sentiment>60?'#c9a84c':d.sentiment<40?'#ff4d6d':'#8b9ab0', display: d.sentiment.toFixed(0) },
+    ];
+    renderMiniGaugesItems(items);
+    const signals = [
+      { name: 'VIX 恐慌', value: Math.min(d.vix/50*100,100), color: d.vix>30?'#ff4d6d':d.vix>20?'#c9a84c':'#00d4aa', display: d.vix.toFixed(1) },
+      { name: '大盤 RSI', value: d.spy_rsi, color: d.spy_rsi>65?'#ff4d6d':'#00d4aa', display: d.spy_rsi.toFixed(0) },
+      { name: '恐貪指數', value: d.fg, color: d.fg>70?'#ff4d6d':d.fg<30?'#00d4aa':'#c9a84c', display: d.fg.toFixed(0) },
+      { name: '量能比值', value: Math.min(d.vol_ratio/3*100,100), color: '#c9a84c', display: d.vol_ratio.toFixed(2)+'x' },
+    ];
+    renderSignalsItems(signals);
+  } catch(e) {
+    document.getElementById('gaugeSub').textContent = '資料載入失敗，請稍後再試';
+    setGauge(65); document.getElementById('gaugeVal').textContent='65';
+  }
+}
+
+async function loadTW() {
+  document.getElementById('vixTitle').textContent = '台股大盤指標';
+  document.getElementById('vixBadge').textContent = '載入中';
+  document.getElementById('vixBadge').className = 'vix-badge mid';
+  document.getElementById('gaugeSub').textContent = '載入台股資料...';
+  try {
+    const twData = await fetchYahoo('^TWII');
+    const chart = twData.chart.result[0];
+    const closes = chart.indicators.quote[0].close.filter(v=>v!=null);
+    const volumes = chart.indicators.quote[0].volume.filter(v=>v!=null);
+    const twRsi = calcRSI(closes, 14);
+    const volAvg = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const volRatio = volumes[volumes.length-1]/volAvg;
+    // Taiwan TAIEX current price and 52-week range for position indicator
+    const curPrice = closes[closes.length-1];
+    const max52 = Math.max(...closes);
+    const min52 = Math.min(...closes);
+    const twPos = (curPrice - min52) / (max52 - min52) * 100; // 0~100%
+    // Bollinger %B as sentiment proxy
+    const {upper, lower} = calcBollinger(closes, 20, 2);
+    const bollPct = Math.max(0, Math.min(100, (curPrice-lower)/(upper-lower)*100));
+    // === 核心演算法：RSI 校準基準值 + 輔助微調 ===
+    const dayChange = closes.length>=2
+      ? (closes[closes.length-1]-closes[closes.length-2])/closes[closes.length-2]*100 : 0;
+
+    // 1. RSI 基準分（已校準：RSI57→76%, RSI45→82%, RSI70→58%）
+    //    反向邏輯：RSI越低代表市場越悲觀，應持更高水位
+    const rsiBase = twRsi < 20 ? 90
+                  : twRsi < 28 ? 88
+                  : twRsi < 35 ? 85
+                  : twRsi < 42 ? 82
+                  : twRsi < 50 ? 79
+                  : twRsi < 60 ? 76
+                  : twRsi < 65 ? 68
+                  : twRsi < 70 ? 60
+                  : twRsi < 74 ? 52
+                  : twRsi < 78 ? 43
+                  : 33;
+
+    // 2. 布林%B 微調（±6，雙重確認才觸發：需 RSI 同步偏高才減碼）
+    const bollAdj = bollPct < 15 ? +6
+                  : bollPct < 30 ? +3
+                  : bollPct > 90 && twRsi > 65 ? -6
+                  : bollPct > 80 && twRsi > 68 ? -4
+                  : 0;
+
+    // 3. 位階微調（±5，需 RSI 同步確認，避免反彈誤判）
+    const posAdj = twPos < 15 ? +5
+                 : twPos < 30 ? +3
+                 : twPos > 90 && twRsi > 68 ? -5
+                 : twPos > 82 && twRsi > 70 ? -3
+                 : 0;
+
+    // 4. 大跌加碼（下跌時加碼，大漲不懲罰除非已超買）
+    const dayAdj = dayChange < -3 ? +5
+                 : dayChange < -1.5 ? +3
+                 : dayChange > 4 && twRsi > 68 ? -3
+                 : 0;
+
+    // Use optimized params if available, else default
+    const optTW = getOptParamsTW();
+    let rec;
+    if (optTW) {
+      const {rB, rS, bB, bS, mA} = optTW;
+      const optBase = twRsi < rB ? mA
+                    : twRsi < (rB+rS)/2 ? 78
+                    : twRsi < rS ? 62
+                    : 38;
+      rec = Math.round(optBase + bollAdj + posAdj + dayAdj);
+      rec = Math.max(20, Math.min(mA, rec));
+    } else {
+      rec = Math.round(rsiBase + bollAdj + posAdj + dayAdj);
+      rec = Math.max(20, Math.min(90, rec));
+    }
+    setGauge(rec);
+    const rsiLabel = twRsi<40?'超賣偏低':twRsi>65?'超買偏高':'中性整理';
+    document.getElementById('gaugeSub').textContent = `加權 RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
+    const badge = document.getElementById('vixBadge');
+    badge.textContent = `RSI ${twRsi.toFixed(0)} · ${rsiLabel}`;
+    badge.className = 'vix-badge ' + (twRsi<40?'low':twRsi>65?'high':'mid');
+    const items = [
+      { label: '大盤RSI', value: twRsi, max: 100, color: twRsi>65?'#ff4d6d':twRsi<40?'#00d4aa':'#c9a84c', display: twRsi.toFixed(0) },
+      { label: '位階', value: twPos, max: 100, color: twPos>75?'#ff4d6d':twPos<30?'#00d4aa':'#c9a84c', display: twPos.toFixed(0)+'%' },
+      { label: '布林%B', value: bollPct, max: 100, color: bollPct>80?'#ff4d6d':bollPct<20?'#00d4aa':'#c9a84c', display: bollPct.toFixed(0) },
+      { label: '量能比', value: Math.min(volRatio,3), max: 3, color: volRatio>1.5?'#c9a84c':'#8b9ab0', display: volRatio.toFixed(2)+'x' },
+      { label: '市場位置', value: twPos, max: 100, color: twPos>70?'#ff4d6d':twPos<35?'#00d4aa':'#8b9ab0', display: twPos.toFixed(0) },
+    ];
+    renderMiniGaugesItems(items);
+    const signals = [
+      { name: '加權 RSI', value: twRsi, color: twRsi>65?'#ff4d6d':twRsi<40?'#00d4aa':'#c9a84c', display: twRsi.toFixed(0) },
+      { name: '指數位階', value: twPos, color: twPos>75?'#ff4d6d':twPos<30?'#00d4aa':'#c9a84c', display: twPos.toFixed(0)+'%' },
+      { name: '布林通道%B', value: bollPct, color: bollPct>80?'#ff4d6d':bollPct<20?'#00d4aa':'#c9a84c', display: bollPct.toFixed(0) },
+      { name: '量能比值', value: Math.min(volRatio/3*100,100), color: volRatio>1.5?'#c9a84c':'#8b9ab0', display: volRatio.toFixed(2)+'x' },
+    ];
+    renderSignalsItems(signals);
+  } catch(e) {
+    document.getElementById('gaugeSub').textContent = '台股資料載入失敗，請稍後再試';
+    setGauge(60); document.getElementById('gaugeVal').textContent='60';
+  }
+}
+
+function renderMiniGaugesItems(items) {
+  document.getElementById('miniGauges').innerHTML = items.map((it,i) =>
+    `<div class="mini-gauge">
+      <svg class="mini-gauge-svg" id="mg${i}" viewBox="0 0 44 26"></svg>
+      <div class="mini-gauge-label">${it.label}</div>
+      <div class="mini-gauge-value" style="color:${it.color}">${it.display}</div>
+    </div>`
+  ).join('');
+  items.forEach((it,i) => drawMiniGauge(document.getElementById('mg'+i), it.value, it.max, it.color));
+}
+
+function renderSignalsItems(signals) {
+  document.getElementById('signalRows').innerHTML = signals.map(s =>
+    `<div class="signal-row">
+      <div class="signal-dot" style="background:${s.color}"></div>
+      <div class="signal-name">${s.name}</div>
+      <div class="signal-bar-wrap"><div class="signal-bar" style="width:${s.value}%;background:${s.color}"></div></div>
+      <div class="signal-val">${s.display}</div>
+    </div>`
+  ).join('');
+}
+
+function calcRSI(closes, period) {
+  if (closes.length < period+1) return 50;
+  let gains=0, losses=0;
+  for (let i=closes.length-period; i<closes.length; i++) {
+    const d = closes[i]-closes[i-1];
+    if (d>0) gains+=d; else losses-=d;
+  }
+  const ag=gains/period, al=losses/period;
+  if (al===0) return 100;
+  return 100 - 100/(1+ag/al);
+}
+
+function calcBollinger(closes, period, mult) {
+  const r = closes.slice(-period);
+  const mid = r.reduce((a,b)=>a+b,0)/period;
+  const sd = Math.sqrt(r.reduce((a,b)=>a+Math.pow(b-mid,2),0)/period);
+  return {upper:mid+mult*sd, mid, lower:mid-mult*sd};
+}
+
+function formatVol(v) {
+  if (v>=1e8) return (v/1e8).toFixed(1)+'億';
+  if (v>=1e6) return (v/1e6).toFixed(1)+'M';
+  if (v>=1e4) return (v/1e4).toFixed(1)+'萬';
+  return String(v);
+}
+
+function drawLineChart(id, values, hLines, min, max) {
+  const svg = document.getElementById(id);
+  if (!svg || values.length<2) return;
+  const W=300,H=80,pad=5, range=max-min||1;
+  const pts = values.map((v,i)=>`${pad+(i/(values.length-1))*(W-pad*2)},${H-pad-((v-min)/range)*(H-pad*2)}`);
+  let html='';
+  hLines.forEach(h=>{
+    const y=H-pad-((h.value-min)/range)*(H-pad*2);
+    html+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="${h.color}" stroke-width="1" stroke-dasharray="4,3"/>`;
+  });
+  html+=`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>`;
+  const lp=pts[pts.length-1].split(',');
+  html+=`<circle cx="${lp[0]}" cy="${lp[1]}" r="3" fill="var(--gold)"/>`;
+  svg.innerHTML=html;
+}
+
+function drawBollingerChart(id, closes, upper, mid, lower) {
+  const svg=document.getElementById(id);
+  if (!svg) return;
+  const W=300,H=80,pad=5;
+  const allV=[...closes,upper,lower];
+  const minV=Math.min(...allV)*0.998, maxV=Math.max(...allV)*1.002, range=maxV-minV||1;
+  const toY=v=>H-pad-((v-minV)/range)*(H-pad*2);
+  const toX=(i,len)=>pad+(i/(len-1))*(W-pad*2);
+  const pts=closes.map((v,i)=>`${toX(i,closes.length)},${toY(v)}`).join(' ');
+  svg.innerHTML=`
+    <line x1="${pad}" y1="${toY(upper)}" x2="${W-pad}" y2="${toY(upper)}" stroke="rgba(255,77,109,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="${pad}" y1="${toY(mid)}" x2="${W-pad}" y2="${toY(mid)}" stroke="rgba(201,168,76,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="${pad}" y1="${toY(lower)}" x2="${W-pad}" y2="${toY(lower)}" stroke="rgba(0,212,170,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+    <polyline points="${pts}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${toX(closes.length-1,closes.length)}" cy="${toY(closes[closes.length-1])}" r="3" fill="var(--gold)"/>
+  `;
+}
+
+async function analyzeStock() {
+  let raw = document.getElementById('stockInput').value.trim().toUpperCase();
+  if (!raw) return;
+  const isTW = /^\d+$/.test(raw);
+  const symbol = isTW ? raw+'.TW' : raw;
+  const btn = document.getElementById('searchBtn');
+  btn.disabled=true;
+  document.getElementById('stockLoading').style.display='block';
+  document.getElementById('stockError').style.display='none';
+  document.getElementById('stockHeader').style.display='none';
+  document.getElementById('indicators').style.display='none';
+  document.getElementById('zoneSummary').style.display='none';
+  try {
+    const data = await fetchYahoo(symbol);
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const q = result.indicators.quote[0];
+    const closes = q.close.filter(v=>v!=null);
+    const highs = q.high.filter(v=>v!=null);
+    const lows = q.low.filter(v=>v!=null);
+    const volumes = q.volume.filter(v=>v!=null);
+    const price = meta.regularMarketPrice||closes[closes.length-1];
+    const prevClose = meta.previousClose||meta.chartPreviousClose||closes[closes.length-2];
+    const change = price-prevClose;
+    const changePct = change/prevClose*100;
+    const rsi = calcRSI(closes,14);
+    const {upper,mid,lower} = calcBollinger(closes,20,2);
+    const volAvg = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const volRatio = volumes[volumes.length-1]/volAvg;
+    let score=50;
+    if (rsi<40) score-=20; else if (rsi>65) score+=20;
+    if (price<=lower) score-=15; else if (price>=upper) score+=15;
+    else score+=((price-lower)/(upper-lower)-0.5)*20;
+    if (volRatio>1.5&&change>0) score+=10; else if (volRatio<0.7) score-=5;
+    score=Math.max(0,Math.min(100,score));
+    let zone,zoneClass,zoneDesc;
+    const ticker = isTW?raw:symbol;
+    if (score<35) { zone='價值區';zoneClass='zone-value';zoneDesc=`${ticker} 目前處於價值區間。RSI 偏低（${rsi.toFixed(0)}），股價接近布林下軌，技術面顯示超賣訊號，可考慮分批布局，建議設好停損點。`; }
+    else if (score>65) { zone='升溫區';zoneClass='zone-hot';zoneDesc=`${ticker} 目前處於升溫區間。RSI 偏高（${rsi.toFixed(0)}），股價接近布林上軌，短期漲幅較大，可考慮分批調節持股，降低風險。`; }
+    else { zone='中性區';zoneClass='zone-neutral';zoneDesc=`${ticker} 目前處於中性區間。RSI ${rsi.toFixed(0)}，股價在布林通道中段，建議持倉不動，等待更明確的技術訊號再操作。`; }
+    document.getElementById('sName').textContent = meta.longName||meta.shortName||symbol;
+    document.getElementById('sSymbol').textContent = symbol+(isTW?' · 台股':' · 美股');
+    document.getElementById('sZone').textContent=zone;
+    document.getElementById('sZone').className='stock-zone '+zoneClass;
+    document.getElementById('sPrice').textContent=price.toFixed(2);
+    document.getElementById('sPrice').style.color=change>=0?'var(--teal)':'var(--red)';
+    document.getElementById('sChange').textContent=(change>=0?'+':'')+change.toFixed(2)+' ('+(change>=0?'+':'')+changePct.toFixed(2)+'%)';
+    document.getElementById('sChange').className='price-change '+(change>=0?'up':'down');
+    document.getElementById('sOpen').textContent=meta.regularMarketOpen||'—';
+    document.getElementById('sHigh').textContent=(meta.regularMarketDayHigh||highs[highs.length-1]||'—');
+    document.getElementById('sLow').textContent=(meta.regularMarketDayLow||lows[lows.length-1]||'—');
+    document.getElementById('sPrev').textContent=prevClose.toFixed(2);
+    const rsiEl=document.getElementById('rsiStatus');
+    if (rsi<40){rsiEl.textContent='超賣';rsiEl.className='indicator-status status-bull';}
+    else if (rsi>65){rsiEl.textContent='超買';rsiEl.className='indicator-status status-bear';}
+    else{rsiEl.textContent='中性';rsiEl.className='indicator-status status-neutral';}
+    document.getElementById('rsiVal').textContent=rsi.toFixed(1);
+    // RSI history
+    const rsiHistory = closes.slice(-30).map((_,i,arr)=>{
+      const sub=closes.slice(Math.max(0,closes.length-60+i), closes.length-30+i+1);
+      return sub.length>=15?calcRSI(sub,14):50;
+    });
+    drawLineChart('rsiChart',rsiHistory,[{value:65,color:'rgba(255,77,109,0.5)'},{value:40,color:'rgba(0,212,170,0.5)'}],0,100);
+    const bollEl=document.getElementById('bollStatus');
+    if (price<=lower*1.01){bollEl.textContent='下軌支撐';bollEl.className='indicator-status status-bull';}
+    else if (price>=upper*0.99){bollEl.textContent='上軌壓力';bollEl.className='indicator-status status-bear';}
+    else{bollEl.textContent='通道內';bollEl.className='indicator-status status-neutral';}
+    document.getElementById('bollUp').textContent=upper.toFixed(2);
+    document.getElementById('bollMid').textContent=mid.toFixed(2);
+    document.getElementById('bollDown').textContent=lower.toFixed(2);
+    drawBollingerChart('bollChart',closes.slice(-30),upper,mid,lower);
+    const volEl=document.getElementById('volStatus');
+    if (volRatio>1.5){volEl.textContent='量能放大';volEl.className='indicator-status '+(change>0?'status-bull':'status-bear');}
+    else if (volRatio<0.7){volEl.textContent='量能萎縮';volEl.className='indicator-status status-neutral';}
+    else{volEl.textContent='正常量能';volEl.className='indicator-status status-neutral';}
+    document.getElementById('volToday').textContent=formatVol(volumes[volumes.length-1]);
+    document.getElementById('volAvg').textContent=formatVol(Math.round(volAvg));
+    document.getElementById('volRatio').textContent=volRatio.toFixed(2)+'x';
+    const rv=volumes.slice(-20), maxV=Math.max(...rv);
+    document.getElementById('volBars').innerHTML=rv.map((v,i)=>{
+      const h=Math.round(v/maxV*100), isL=i===rv.length-1;
+      const c=isL?(change>=0?'var(--teal)':'var(--red)'):'rgba(201,168,76,0.4)';
+      return `<div class="vol-bar" style="height:${h}%;background:${c}"></div>`;
+    }).join('');
+    document.getElementById('zoneMeterFill').style.width=score+'%';
+    document.getElementById('zoneMeterFill').style.background=score<35?'var(--teal)':score>65?'var(--red)':'var(--gold)';
+    document.getElementById('zoneDesc').textContent=zoneDesc;
+    document.getElementById('stockHeader').style.display='block';
+    document.getElementById('indicators').style.display='flex';
+    document.getElementById('zoneSummary').style.display='block';
+  } catch(e) {
+    document.getElementById('stockError').textContent='查無此股票代號，請確認後重試。台股請輸入數字代號（如 2330），美股請輸入英文代號（如 NVDA）。';
+    document.getElementById('stockError').style.display='block';
+  }
+  document.getElementById('stockLoading').style.display='none';
+  btn.disabled=false;
+}
+
+document.getElementById('stockInput').addEventListener('keydown', e=>{ if(e.key==='Enter') analyzeStock(); });
+
+// Portfolio
+let twStocks=[], usStocks=[];
+function addStock(m) {
+  const id=Date.now();
+  (m==='tw'?twStocks:usStocks).push({id,ticker:'',qty:'',price:''});
+  renderStocks();
+}
+function removeStock(m,id) {
+  if(m==='tw') twStocks=twStocks.filter(s=>s.id!==id);
+  else usStocks=usStocks.filter(s=>s.id!==id);
+  renderStocks();
+}
+function updateStock(m,id,field,value) {
+  const s=(m==='tw'?twStocks:usStocks).find(s=>s.id===id);
+  if(s) s[field]=value;
+}
+function renderStocks() {
+  ['tw','us'].forEach(m=>{
+    const arr=m==='tw'?twStocks:usStocks;
+    document.getElementById(m+'Stocks').innerHTML=arr.map(s=>`
+      <div class="stock-entry">
+        <input class="stock-ticker" type="text" placeholder="${m==='tw'?'2330':'NVDA'}" value="${s.ticker}" oninput="updateStock('${m}',${s.id},'ticker',this.value)"/>
+        <input class="stock-qty" type="number" placeholder="股數" value="${s.qty}" oninput="updateStock('${m}',${s.id},'qty',this.value)"/>
+        <input class="stock-price-input" type="number" placeholder="成本價" value="${s.price}" oninput="updateStock('${m}',${s.id},'price',this.value)"/>
+        <button class="remove-btn" onclick="removeStock('${m}',${s.id})">×</button>
+      </div>`
+    ).join('');
+  });
+}
+
+async function calculatePortfolio() {
+  const cashTWD=parseFloat(document.getElementById('cashTWD').value)||0;
+  const cashUSD=parseFloat(document.getElementById('cashUSD').value)||0;
+  document.getElementById('calcLoading').style.display='block';
+  document.getElementById('calcError').style.display='none';
+  document.getElementById('resultPanel').style.display='none';
+  try {
+    let usdTwd=32;
+    try {
+      const fx=await fetchYahoo('USDTWD=X');
+      const fxC=fx.chart.result[0].indicators.quote[0].close.filter(v=>v!=null);
+      usdTwd=fxC[fxC.length-1];
+    } catch(e){}
+    let twVal=0;
+    for (const s of twStocks) {
+      if (!s.ticker||!s.qty) continue;
+      try {
+        const sym=/^\d+$/.test(s.ticker)?s.ticker+'.TW':s.ticker;
+        const d=await fetchYahoo(sym);
+        twVal+=d.chart.result[0].meta.regularMarketPrice*(parseFloat(s.qty)||0);
+      } catch(e){ twVal+=(parseFloat(s.price)||0)*(parseFloat(s.qty)||0); }
+    }
+    let usVal=0;
+    for (const s of usStocks) {
+      if (!s.ticker||!s.qty) continue;
+      try {
+        const d=await fetchYahoo(s.ticker);
+        usVal+=d.chart.result[0].meta.regularMarketPrice*(parseFloat(s.qty)||0);
+      } catch(e){ usVal+=(parseFloat(s.price)||0)*(parseFloat(s.qty)||0); }
+    }
+    const investedUSD=usVal+(twVal/usdTwd);
+    const totalUSD=cashUSD+(cashTWD/usdTwd)+investedUSD;
+    const curLevel=totalUSD>0?investedUSD/totalUSD*100:0;
+    let suggest=65;
+    try {
+      const vd=await fetchYahoo('^VIX');
+      const vc=vd.chart.result[0].indicators.quote[0].close.filter(v=>v!=null);
+      const vix=vc[vc.length-1];
+      suggest=vix<15?80:vix<20?72:vix<25?60:vix<30?50:vix<35?38:28;
+    } catch(e){}
+    const diff=curLevel-suggest;
+    let advice;
+    if (diff>15) advice=`目前持股水位（${curLevel.toFixed(0)}%）明顯高於建議水位（${suggest}%），市場波動風險升高，建議適度減碼，可先從漲幅較大的個股開始調節。`;
+    else if (diff>5) advice=`目前持股水位（${curLevel.toFixed(0)}%）略高於建議水位（${suggest}%），可小幅調節，或設置嚴格停損點，維持紀律操作。`;
+    else if (diff<-15) advice=`目前持股水位（${curLevel.toFixed(0)}%）明顯低於建議水位（${suggest}%），市場整體偏多，現金部位過高，可考慮分批布局優質標的。`;
+    else if (diff<-5) advice=`目前持股水位（${curLevel.toFixed(0)}%）略低於建議水位（${suggest}%），可逢回檔機會適度加碼，建議優先布局價值區標的。`;
+    else advice=`目前持股水位（${curLevel.toFixed(0)}%）與建議水位（${suggest}%）接近，資產配置良好，維持現有部位並按計畫操作即可。`;
+    document.getElementById('rCashTWD').textContent='NT$ '+cashTWD.toLocaleString();
+    document.getElementById('rCashUSD').textContent='US$ '+cashUSD.toLocaleString();
+    document.getElementById('rTWVal').textContent='NT$ '+Math.round(twVal).toLocaleString();
+    document.getElementById('rUSVal').textContent='US$ '+Math.round(usVal).toLocaleString();
+    document.getElementById('rLevel').textContent=curLevel.toFixed(1)+'%';
+    document.getElementById('rSuggest').textContent=suggest+'%';
+    document.getElementById('rAdvice').textContent=advice;
+    document.getElementById('resultPanel').style.display='block';
+  } catch(e){
+    document.getElementById('calcError').textContent='計算過程發生錯誤，請確認股票代號是否正確。';
+    document.getElementById('calcError').style.display='block';
+  }
+  document.getElementById('calcLoading').style.display='none';
+}
+
+loadPage1();
+
+// ====== OPTIMIZER ENGINE ======
+let optMarket = 'us';
+let optimizedParams = null;
+
+function setOptMarket(m) {
+  optMarket = m;
+  document.getElementById('optBtnUS').classList.toggle('active', m==='us');
+  document.getElementById('optBtnTW').classList.toggle('active', m==='tw');
+  document.getElementById('optResult').style.display = 'none';
+  document.getElementById('optAppliedBadge').style.display = 'none';
+}
+
+function logOpt(msg) {
+  const log = document.getElementById('optLog');
+  log.style.display = 'block';
+  log.innerHTML += msg + '<br>';
+  log.scrollTop = log.scrollHeight;
+}
+
+function setProgress(pct, text) {
+  document.getElementById('optBar').style.width = pct + '%';
+  document.getElementById('optProgressText').textContent = text;
+}
+
+// Simulate portfolio value given allocation history and price history
+function simulatePortfolio(priceArr, allocArr) {
+  // allocArr[i] = recommended stock % on day i
+  // We model: totalValue = cash + stocks, rebalanced daily
+  let totalVal = 100;
+  for (let i = 1; i < priceArr.length; i++) {
+    const stockPct = allocArr[i-1] / 100;
+    const cashPct  = 1 - stockPct;
+    const dayReturn = (priceArr[i] - priceArr[i-1]) / priceArr[i-1];
+    totalVal = totalVal * (cashPct + stockPct * (1 + dayReturn));
+  }
+  return totalVal; // final value of $100 invested
+}
+
+// Max drawdown calculation
+function maxDrawdown(priceArr, allocArr) {
+  let peak = 100, val = 100, maxDD = 0;
+  for (let i = 1; i < priceArr.length; i++) {
+    const stockPct = allocArr[i-1] / 100;
+    const dayReturn = (priceArr[i] - priceArr[i-1]) / priceArr[i-1];
+    val = val * ((1 - stockPct) + stockPct * (1 + dayReturn));
+    if (val > peak) peak = val;
+    const dd = (peak - val) / peak * 100;
+    if (dd > maxDD) maxDD = dd;
+  }
+  return maxDD;
+}
+
+// Sharpe-like score
+function scoreStrategy(finalVal, dd, n) {
+  const annualReturn = (Math.pow(finalVal/100, 252/n) - 1) * 100;
+  return annualReturn - dd * 0.5; // penalize drawdown
+}
+
+async function runOptimizer() {
+  const btn = document.getElementById('optRunBtn');
+  btn.disabled = true;
+  document.getElementById('optProgress').style.display = 'block';
+  document.getElementById('optResult').style.display = 'none';
+  document.getElementById('optLog').innerHTML = '';
+  document.getElementById('optAppliedBadge').style.display = 'none';
+  setProgress(5, '抓取歷史資料中...');
+
+  try {
+    let prices, indicators;
+
+    if (optMarket === 'us') {
+      logOpt('► 抓取 SPY 一年歷史資料...');
+      const spyRaw = await fetchYahoo('SPY');
+      const spyChart = spyRaw.chart.result[0];
+      prices = spyChart.indicators.quote[0].close.filter(v=>v!=null);
+      logOpt(`  ✓ 取得 ${prices.length} 筆交易日資料`);
+      setProgress(20, '計算技術指標...');
+      logOpt('► 計算每日 VIX 代理指標 (ATR-based)...');
+
+      // Calculate rolling 20-day volatility as VIX proxy
+      const vixProxy = prices.map((p, i) => {
+        if (i < 20) return 20;
+        const sub = prices.slice(i-20, i);
+        const mean = sub.reduce((a,b)=>a+b,0)/20;
+        const std = Math.sqrt(sub.reduce((a,b)=>a+Math.pow(b-mean,2),0)/20);
+        return Math.min(60, std/mean*100*15); // scale to VIX-like range
+      });
+
+      // Calculate rolling RSI
+      const rsiArr = prices.map((p, i) => {
+        if (i < 15) return 50;
+        return calcRSI(prices.slice(0, i+1), 14);
+      });
+
+      indicators = { vixProxy, rsiArr };
+      logOpt(`  ✓ VIX代理指標 & RSI 計算完成`);
+
+    } else {
+      logOpt('► 抓取 ^TWII 一年歷史資料...');
+      const twRaw = await fetchYahoo('^TWII');
+      const twChart = twRaw.chart.result[0];
+      prices = twChart.indicators.quote[0].close.filter(v=>v!=null);
+      logOpt(`  ✓ 取得 ${prices.length} 筆交易日資料`);
+      setProgress(20, '計算技術指標...');
+
+      const rsiArr = prices.map((p, i) => {
+        if (i < 15) return 50;
+        return calcRSI(prices.slice(0, i+1), 14);
+      });
+
+      const bollPctArr = prices.map((p, i) => {
+        if (i < 20) return 50;
+        const {upper, lower} = calcBollinger(prices.slice(0, i+1), 20, 2);
+        return Math.max(0, Math.min(100, (p-lower)/(upper-lower)*100));
+      });
+
+      indicators = { rsiArr, bollPctArr };
+      logOpt(`  ✓ RSI & 布林%B 計算完成`);
+    }
+
+    setProgress(35, '開始回測參數組合...');
+    logOpt('► 開始網格搜尋最佳參數...');
+
+    const n = prices.length;
+    let bestScore = -Infinity;
+    let bestParams = null;
+    let bestAlloc = null;
+    let testedCount = 0;
+
+    // Original strategy for baseline
+    let origAlloc;
+    if (optMarket === 'us') {
+      origAlloc = indicators.vixProxy.map((vix, i) => {
+        const rsi = indicators.rsiArr[i];
+        let r = vix<12?32:vix<15?40:vix<18?50:vix<22?60:vix<27?70:vix<32?78:84;
+        if (rsi<35) r+=6; if (rsi>65) r-=6;
+        return Math.max(20, Math.min(90, r));
+      });
+    } else {
+      origAlloc = indicators.rsiArr.map((rsi, i) => {
+        const bp = indicators.bollPctArr[i];
+        let r = rsi<25?90:rsi<35?80:rsi<45?70:rsi<55?60:rsi<65?48:36;
+        if (bp<20) r+=12; if (bp>80) r-=12;
+        return Math.max(20, Math.min(90, r));
+      });
+    }
+    const origFinal = simulatePortfolio(prices, origAlloc);
+    const origDD = maxDrawdown(prices, origAlloc);
+    const origScore = scoreStrategy(origFinal, origDD, n);
+    logOpt(`  基準策略: 年化 ${((Math.pow(origFinal/100,252/n)-1)*100).toFixed(1)}% | 最大回撤 ${origDD.toFixed(1)}%`);
+
+    // Grid search parameters
+    const totalTests = optMarket === 'us' ? 216 : 180;
+    let tested = 0;
+
+    if (optMarket === 'us') {
+      // VIX thresholds: [low, mid, high] and RSI adj
+      const vixLows  = [12, 15, 18];
+      const vixMids  = [22, 25, 28];
+      const vixHighs = [32, 35, 38];
+      const rsiBuys  = [30, 35, 40];
+      const rsiSells = [60, 65, 70];
+      const maxAllocs = [80, 85, 90];
+
+      for (const vL of vixLows) for (const vM of vixMids) for (const vH of vixHighs)
+      for (const rB of rsiBuys) for (const rS of rsiSells) for (const mA of maxAllocs) {
+        tested++;
+        if (tested % 30 === 0) {
+          const pct = 35 + (tested/totalTests)*50;
+          setProgress(pct, `回測中 ${tested}/${totalTests} 組參數...`);
+          await new Promise(r => setTimeout(r, 0));
+        }
+        const alloc = indicators.vixProxy.map((vix, i) => {
+          const rsi = indicators.rsiArr[i];
+          let r = vix<vL?32:vix<vM?52:vix<vH?70:mA;
+          if (rsi<rB) r+=8; if (rsi>rS) r-=8;
+          return Math.max(20, Math.min(mA, r));
+        });
+        const finalV = simulatePortfolio(prices, alloc);
+        const dd = maxDrawdown(prices, alloc);
+        const sc = scoreStrategy(finalV, dd, n);
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestParams = {vL, vM, vH, rB, rS, mA};
+          bestAlloc = alloc;
+        }
+      }
+    } else {
+      // RSI thresholds and Bollinger adj
+      const rsiBuys  = [30, 35, 40, 45];
+      const rsiSells = [55, 60, 65, 70];
+      const bollBuys = [15, 20, 25];
+      const bollSells = [70, 75, 80];
+      const maxAllocs = [82, 85, 88];
+
+      for (const rB of rsiBuys) for (const rS of rsiSells)
+      for (const bB of bollBuys) for (const bS of bollSells) for (const mA of maxAllocs) {
+        tested++;
+        if (tested % 25 === 0) {
+          const pct = 35 + (tested/totalTests)*50;
+          setProgress(pct, `回測中 ${tested}/${totalTests} 組參數...`);
+          await new Promise(r => setTimeout(r, 0));
+        }
+        const alloc = indicators.rsiArr.map((rsi, i) => {
+          const bp = indicators.bollPctArr[i];
+          let r = rsi<rB?mA:rsi<(rB+rS)/2?68:rsi<rS?50:35;
+          if (bp<bB) r+=10; if (bp>bS) r-=10;
+          return Math.max(20, Math.min(mA, r));
+        });
+        const finalV = simulatePortfolio(prices, alloc);
+        const dd = maxDrawdown(prices, alloc);
+        const sc = scoreStrategy(finalV, dd, n);
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestParams = {rB, rS, bB, bS, mA};
+          bestAlloc = alloc;
+        }
+      }
+    }
+
+    setProgress(90, '整理優化結果...');
+    const bestFinal = simulatePortfolio(prices, bestAlloc);
+    const bestDD = maxDrawdown(prices, bestAlloc);
+    const origAnn = ((Math.pow(origFinal/100, 252/n)-1)*100).toFixed(1);
+    const bestAnn = ((Math.pow(bestFinal/100, 252/n)-1)*100).toFixed(1);
+
+    logOpt(`► 優化完成！共測試 ${tested} 組參數`);
+    logOpt(`  最佳策略: 年化 ${bestAnn}% | 最大回撤 ${bestDD.toFixed(1)}%`);
+    logOpt(`  綜合得分: ${bestScore.toFixed(1)} (原始: ${origScore.toFixed(1)})`);
+
+    // Store optimized params
+    optimizedParams = { market: optMarket, params: bestParams, score: bestScore };
+
+    // Render results
+    const mktLabel = optMarket === 'us' ? '美股 (SPY)' : '台股 (TWII)';
+    document.getElementById('optStratName').textContent = mktLabel + ' 最佳策略';
+    document.getElementById('optStratScore').textContent = bestScore.toFixed(1);
+
+    let paramHTML = '';
+    if (optMarket === 'us') {
+      paramHTML = `
+        <div class="opt-param-row"><span class="opt-param-label">低波動 VIX 閾值</span><span class="opt-param-val">${bestParams.vL}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">中波動 VIX 閾值</span><span class="opt-param-val">${bestParams.vM}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">高波動 VIX 閾值</span><span class="opt-param-val">${bestParams.vH}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">RSI 超賣買入線</span><span class="opt-param-val">${bestParams.rB}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">RSI 超買減碼線</span><span class="opt-param-val">${bestParams.rS}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">最高建議水位</span><span class="opt-param-val">${bestParams.mA}%</span></div>`;
+    } else {
+      paramHTML = `
+        <div class="opt-param-row"><span class="opt-param-label">RSI 超賣買入線</span><span class="opt-param-val">${bestParams.rB}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">RSI 超買減碼線</span><span class="opt-param-val">${bestParams.rS}</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">布林下軌買入</span><span class="opt-param-val">${bestParams.bB}%</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">布林上軌減碼</span><span class="opt-param-val">${bestParams.bS}%</span></div>
+        <div class="opt-param-row"><span class="opt-param-label">最高建議水位</span><span class="opt-param-val">${bestParams.mA}%</span></div>`;
+    }
+    document.getElementById('optParams').innerHTML = paramHTML;
+
+    const origRetText = (origAnn >= 0 ? '+' : '') + origAnn + '%';
+    const bestRetText = (bestAnn >= 0 ? '+' : '') + bestAnn + '%';
+    document.getElementById('optOldReturn').textContent = origRetText;
+    document.getElementById('optNewReturn').textContent = bestRetText;
+    document.getElementById('optMaxDD').textContent = '-' + bestDD.toFixed(1) + '%';
+
+    setProgress(100, '優化完成！');
+    document.getElementById('optResult').style.display = 'block';
+
+  } catch(e) {
+    logOpt('✗ 錯誤：' + e.message);
+    setProgress(0, '載入失敗，請稍後再試');
+  }
+
+  btn.disabled = false;
+}
+
+function applyOptimizedParams() {
+  if (!optimizedParams) return;
+  const p = optimizedParams.params;
+  const m = optimizedParams.market;
+
+  // Store to sessionStorage for use in loadUS/loadTW
+  sessionStorage.setItem('optimizedParams', JSON.stringify(optimizedParams));
+
+  document.getElementById('optAppliedBadge').style.display = 'block';
+  document.getElementById('optApplyBtn').textContent = '✓ 已套用';
+
+  // Switch to risk page and reload with optimized params
+  switchTab(0);
+  if (m === 'us') {
+    switchMarket('us');
+  } else {
+    switchMarket('tw');
+  }
+}
+
+// ====== BACKGROUND OPTIMIZER (Option A: Inverse Correlation) ======
+let optRunning = false;
+
+function setOptProgress(pct, text) {
+  document.getElementById('optStatusBar').style.width = pct + '%';
+  document.getElementById('optStatusText').textContent = text;
+}
+
+async function runBackgroundOpt() {
+  if (optRunning) return;
+  optRunning = true;
+  const btn = document.getElementById('optTriggerBtn');
+  btn.disabled = true;
+  btn.textContent = '⚙ 優化執行中...';
+  document.getElementById('optStatusRow').style.display = 'block';
+  document.getElementById('optLastRow').style.display = 'none';
+  setOptProgress(5, '抓取歷史資料...');
+
+  try {
+    // Run both markets simultaneously
+    await Promise.all([
+      optimizeMarket('us'),
+      optimizeMarket('tw')
+    ]);
+
+    // Save timestamp
+    const now = new Date().toLocaleString('zh-TW', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    localStorage.setItem('optLastTime', now);
+
+    setOptProgress(100, '優化完成，已套用最新參數');
+    document.getElementById('optLastRow').style.display = 'flex';
+    document.getElementById('optLastTime').textContent = '上次優化：' + now;
+    document.getElementById('optLastScore').textContent = '✓ 已套用';
+
+    // Reload current market with new params
+    if (currentMarket === 'us') loadUS(); else loadTW();
+
+  } catch(e) {
+    setOptProgress(0, '優化失敗：' + e.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚙ 執行參數優化';
+  optRunning = false;
+}
+
+async function optimizeMarket(market) {
+  const symbol = market === 'us' ? 'SPY' : '^TWII';
+  // Fetch 1 year of data
+  const raw = await fetchYahooLong(symbol);
+  const result = raw.chart.result[0];
+  const prices = result.indicators.quote[0].close.filter(v => v != null);
+  const n = prices.length;
+  if (n < 60) throw new Error(symbol + ' 資料不足');
+
+  setOptProgress(market === 'us' ? 20 : 60, `計算 ${market === 'us' ? '美股' : '台股'} 技術指標...`);
+  await sleep(0);
+
+  // Pre-calculate indicators for all days
+  const rsiArr = prices.map((_, i) => i < 15 ? 50 : calcRSI(prices.slice(0, i+1), 14));
+  const bollArr = prices.map((p, i) => {
+    if (i < 20) return 50;
+    const {upper, lower} = calcBollinger(prices.slice(0, i+1), 20, 2);
+    return upper === lower ? 50 : Math.max(0, Math.min(100, (p-lower)/(upper-lower)*100));
+  });
+  // Rolling 20-day volatility as VIX proxy for US
+  const volArr = prices.map((_, i) => {
+    if (i < 20) return 20;
+    const sub = prices.slice(i-20, i);
+    const mean = sub.reduce((a,b)=>a+b,0)/20;
+    const std = Math.sqrt(sub.reduce((a,b)=>a+Math.pow(b-mean,2),0)/20);
+    return Math.min(60, std/mean*100*15);
+  });
+
+  // Future 10-day return for each day (target variable)
+  const futureReturn = prices.map((p, i) => {
+    if (i + 10 >= n) return null;
+    return (prices[i+10] - p) / p * 100;
+  });
+
+  setOptProgress(market === 'us' ? 30 : 70, `回測 ${market === 'us' ? '美股' : '台股'} 參數組合...`);
+  await sleep(0);
+
+  let bestCorr = -Infinity;
+  let bestParams = null;
+  let tested = 0;
+
+  if (market === 'us') {
+    // Grid search: VIX thresholds + RSI thresholds
+    const vixLows  = [10, 14, 18];
+    const vixMids  = [20, 24, 28];
+    const vixHighs = [30, 34, 38];
+    const rsiBuys  = [28, 33, 38, 43];
+    const rsiSells = [58, 63, 68, 72];
+    const maxAllocs = [80, 85, 88];
+    // Total: 3*3*3*4*4*3 = 1296, too many - simplify
+    for (const vL of vixLows) for (const vM of vixMids) for (const vH of vixHighs)
+    for (const rB of rsiBuys) for (const rS of rsiSells) for (const mA of maxAllocs) {
+      tested++;
+      if (tested % 100 === 0) { await sleep(0); }
+      // Generate daily positions with these params
+      const positions = volArr.map((vix, i) => {
+        const rsi = rsiArr[i];
+        let r = vix < vL ? 32 : vix < vM ? 52 : vix < vH ? 68 : mA;
+        if (rsi < rB) r += 8; if (rsi > rS) r -= 8;
+        return Math.max(20, Math.min(mA, r));
+      });
+      // Calculate Pearson correlation with future returns (Option A)
+      const corr = pearsonCorr(positions, futureReturn);
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestParams = { vL, vM, vH, rB, rS, mA, corr };
+      }
+    }
+  } else {
+    // Grid search: RSI + Bollinger thresholds
+    const rsiBuys  = [28, 33, 38, 43, 48];
+    const rsiSells = [52, 57, 62, 67, 72];
+    const bollBuys = [15, 20, 25, 30];
+    const bollSells = [65, 72, 80];
+    const maxAllocs = [82, 85, 88];
+    for (const rB of rsiBuys) for (const rS of rsiSells)
+    for (const bB of bollBuys) for (const bS of bollSells) for (const mA of maxAllocs) {
+      tested++;
+      if (tested % 80 === 0) { await sleep(0); }
+      const positions = rsiArr.map((rsi, i) => {
+        const bp = bollArr[i];
+        let r = rsi < rB ? mA : rsi < (rB+rS)/2 ? 68 : rsi < rS ? 50 : 32;
+        if (bp < bB) r += 10; if (bp > bS) r -= 10;
+        return Math.max(20, Math.min(mA, r));
+      });
+      const corr = pearsonCorr(positions, futureReturn);
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestParams = { rB, rS, bB, bS, mA, corr };
+      }
+    }
+  }
+
+  // Save best params to localStorage
+  localStorage.setItem('optParams_' + market, JSON.stringify(bestParams));
+  console.log(`[Optimizer] ${market} best corr: ${bestCorr.toFixed(4)}, params:`, bestParams);
+}
+
+// Pearson correlation ignoring null future returns
+function pearsonCorr(positions, futureReturns) {
+  const pairs = positions.map((p, i) => ({ p, r: futureReturns[i] }))
+    .filter(v => v.r !== null && isFinite(v.p) && isFinite(v.r));
+  if (pairs.length < 20) return -1;
+  const n = pairs.length;
+  const meanP = pairs.reduce((a,v)=>a+v.p,0)/n;
+  const meanR = pairs.reduce((a,v)=>a+v.r,0)/n;
+  const num = pairs.reduce((a,v)=>a+(v.p-meanP)*(v.r-meanR),0);
+  const denP = Math.sqrt(pairs.reduce((a,v)=>a+Math.pow(v.p-meanP,2),0));
+  const denR = Math.sqrt(pairs.reduce((a,v)=>a+Math.pow(v.r-meanR,2),0));
+  return (denP*denR === 0) ? 0 : num/(denP*denR);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function fetchYahooLong(sym) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1y`;
+  for (const proxyFn of PROXIES) {
+    try {
+      const r = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) continue;
+      const text = await r.text();
+      let parsed;
+      try { const j = JSON.parse(text); parsed = j.contents ? JSON.parse(j.contents) : j; }
+      catch(e) { parsed = JSON.parse(text); }
+      if (parsed?.chart?.result) return parsed;
+    } catch(e) { continue; }
+  }
+  throw new Error('無法取得 ' + sym + ' 一年歷史資料');
+}
+
+// Apply optimized params in loadUS / loadTW
+function getOptParamsUS() {
+  const s = localStorage.getItem('optParams_us');
+  return s ? JSON.parse(s) : null;
+}
+function getOptParamsTW() {
+  const s = localStorage.getItem('optParams_tw');
+  return s ? JSON.parse(s) : null;
+}
+
+// On load, restore last opt info
+(function restoreOptInfo() {
+  const t = localStorage.getItem('optLastTime');
+  if (t) {
+    document.getElementById('optLastRow').style.display = 'flex';
+    document.getElementById('optLastTime').textContent = '上次優化：' + t;
+    document.getElementById('optLastScore').textContent = '✓ 已套用';
+  }
+})();
+</script>
+</body>
+</html>
