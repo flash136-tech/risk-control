@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>退休現金流存活率模型</title>
+<style>
+:root{
+  --bg:#0d1520; --panel:#131f2e; --panel2:#1a2838; --border:#26374a;
+  --ink:#e8eef5; --muted:#8fa3bd; --faint:#5f7288;
+  --accent:#38bdf8; --good:#34d399; --bad:#fb7185; --warn:#fbbf24;
+  --band1:rgba(56,189,248,.10); --band2:rgba(56,189,248,.22); --median:#38bdf8;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
+}
+[data-theme="light"]{
+  --bg:#eef2f7; --panel:#ffffff; --panel2:#f3f6fa; --border:#d6dfea;
+  --ink:#15222f; --muted:#566677; --faint:#8b9bad;
+  --band1:rgba(2,132,199,.10); --band2:rgba(2,132,199,.20); --median:#0284c7; --accent:#0284c7;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{padding:0}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 18px 60px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:8px;flex-wrap:wrap}
+h1{font-size:19px;font-weight:650;letter-spacing:.01em;margin:0 0 3px}
+.sub{color:var(--muted);font-size:12.5px;line-height:1.5;max-width:640px}
+.themebtn{background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-family:var(--sans);
+  font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer}
+.themebtn:hover{color:var(--ink)}
+.layout{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:18px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+/* panel */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.controls{padding:6px 4px}
+.grp{border-bottom:1px solid var(--border)}
+.grp:last-child{border-bottom:none}
+.grp>summary{list-style:none;cursor:pointer;padding:12px 14px;font-size:12.5px;font-weight:600;
+  color:var(--ink);display:flex;justify-content:space-between;align-items:center;user-select:none}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary .chev{color:var(--faint);font-size:11px;transition:transform .18s}
+.grp[open]>summary .chev{transform:rotate(90deg)}
+.grpbody{padding:2px 14px 14px}
+.ctl{margin:11px 0}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted);margin-bottom:6px}
+.ctl label .val{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+  background:var(--panel2);outline:none;margin:2px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:2px solid var(--panel)}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--panel)}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:12px;
+  padding:7px 4px;cursor:pointer}
+.seg button.on{background:var(--accent);color:#04121e;font-weight:650}
+[data-theme="light"] .seg button.on{color:#fff}
+.tgl{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.switch{position:relative;width:38px;height:21px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:var(--panel2);border:1px solid var(--border);border-radius:20px;transition:.15s;cursor:pointer}
+.slider:before{content:"";position:absolute;height:15px;width:15px;left:2px;top:2px;background:var(--faint);border-radius:50%;transition:.15s}
+.switch input:checked+.slider{background:var(--accent)}
+.switch input:checked+.slider:before{transform:translateX(17px);background:#04121e}
+/* results */
+.results{display:flex;flex-direction:column;gap:16px}
+.headline{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:520px){.headline{grid-template-columns:1fr}}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px 16px}
+.kpi .k{font-size:11.5px;color:var(--muted);margin-bottom:8px;letter-spacing:.02em}
+.kpi .v{font-family:var(--mono);font-size:34px;font-weight:680;line-height:1}
+.kpi .v small{font-size:16px;font-weight:500;color:var(--muted);margin-left:2px}
+.kpi .note{font-size:11px;color:var(--faint);margin-top:7px}
+.kpi.surv .v{color:var(--good)} .kpi.bank .v{color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px 16px}
+.card h3{font-size:13px;font-weight:600;margin:0 0 3px}
+.card .cap{font-size:11.5px;color:var(--muted);margin:0 0 12px;line-height:1.5}
+canvas{display:block;width:100%}
+.checks{display:flex;flex-direction:column;gap:8px}
+.chk{display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted);line-height:1.45}
+.chk .dot{flex:none;width:15px;height:15px;border-radius:50%;margin-top:1px;display:grid;place-items:center;font-size:10px;font-weight:700}
+.chk .dot.ok{background:rgba(52,211,153,.16);color:var(--good)}
+.chk .dot.no{background:rgba(251,113,133,.16);color:var(--bad)}
+.chk b{color:var(--ink);font-weight:600}
+.disc{font-size:11px;color:var(--faint);line-height:1.6;border-top:1px solid var(--border);padding-top:12px;margin-top:4px}
+.busy{opacity:.45;transition:opacity .1s}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>退休現金流存活率模型</h1>
+      <div class="sub">用蒙地卡羅模擬數千條路徑,評估現有資產在退休後能否撐到期望壽命。內建市場波動、崩盤情境、通膨,以及<b style="color:var(--ink)">質押／margin 的追繳與強制平倉</b>——這是單薪＋槓桿最致命的風險。拉動左側參數即時重算。</div>
+    </div>
+    <button class="themebtn" id="theme">☀ 淺色</button>
+  </header>
+
+  <div class="layout">
+    <!-- CONTROLS -->
+    <div class="panel controls" id="controls">
+      <details class="grp" open><summary>資產與年齡 <span class="chev">▶</span></summary>
+        <div class="grpbody">
+          <div class="ctl"><label>股票市值 <span class="val"><span id="v_stock"></span> 萬</span></label><input type="range" id="stock" min="200" max="2000" step="10" value="1000"></div>
+          <div class="ctl"><label>質押／margin 借款 <span class="val"><span id="v_loan"></span> 萬</span></label><input type="range" id="loan" min="0" max="600" step="10" value="140"></div>
+          <div class="ctl"><label>目前年齡 <span class="val"><span id="v_age"></span> 歲</span></label><input type="range" id="age" min="35" max="65" step="1" value="46"></div>
+          <div class="ctl"><label>期望壽命 <span class="val"><span id="v_life"></span> 歲</span></label><input type="range" id="life" min="80" max="105" step="1" value="95"></div>
+          <div class="ctl"><label>退休年齡（薪資終止） <span class="val"><span id="v_ret"></span> 歲</span></label><input type="range" id="ret" min="46" max="70" step="1" value="46"></div>
+        </div>
+      </details>
+
+      <details class="grp" open><summary>開銷與收入 <span class="chev">▶</span></summary>
+        <div class="grpbody">
+          <div class="ctl"><label>開銷模式</label>
+            <div class="seg" id="spendmode"><button data-v="twoStage" class="on">雙段開銷</button><button data-v="rate">初始提領率</button></div>
+          </div>
+          <div id="twostage">
+            <div class="ctl"><label>過渡期開銷 <span class="val"><span id="v_s1"></span> 萬/年</span></label><input type="range" id="s1" min="30" max="150" step="1" value="85"></div>
+            <div class="ctl"><label>穩定期開銷 <span class="val"><span id="v_s2"></span> 萬/年</span></label><input type="range" id="s2" min="25" max="120" step="1" value="60"></div>
+            <div class="ctl"><label>開銷轉段年齡（房貸繳清/子女獨立） <span class="val"><span id="v_sw"></span> 歲</span></label><input type="range" id="sw" min="46" max="80" step="1" value="56"></div>
+          </div>
+          <div id="ratebox" style="display:none">
+            <div class="ctl"><label>初始提領率（占淨資產） <span class="val"><span id="v_wr"></span> %</span></label><input type="range" id="wr" min="2" max="10" step="0.1" value="4"></div>
+          </div>
+          <div class="ctl"><label>退休前稅後年薪 <span class="val"><span id="v_sal"></span> 萬/年</span></label><input type="range" id="sal" min="0" max="250" step="1" value="133"></div>
+          <div class="ctl"><div class="tgl">配偶收入<label class="switch"><input type="checkbox" id="spouse"><span class="slider"></span></label></div></div>
+          <div id="spousebox" style="display:none">
+            <div class="ctl"><label>配偶稅後年收 <span class="val"><span id="v_sp"></span> 萬/年</span></label><input type="range" id="sp" min="0" max="150" step="1" value="50"></div>
+            <div class="ctl"><label>領取至年齡 <span class="val"><span id="v_spu"></span> 歲</span></label><input type="range" id="spu" min="46" max="70" step="1" value="60"></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="grp"><summary>質押與策略 <span class="chev">▶</span></summary>
+        <div class="grpbody">
+          <div class="ctl"><label>現金流缺口優先</label>
+            <div class="seg" id="gap"><button data-v="sell" class="on">賣股</button><button data-v="borrow">加借 margin</button></div>
+          </div>
+          <div class="ctl"><div class="tgl">房貸提前清償<label class="switch"><input type="checkbox" id="prepay"><span class="slider"></span></label></div></div>
+          <div id="prepaybox" style="display:none">
+            <div class="ctl"><label>期初清償金額（直接進入穩定期開銷） <span class="val"><span id="v_pp"></span> 萬</span></label><input type="range" id="pp" min="100" max="600" step="10" value="300"></div>
+          </div>
+          <div class="ctl"><label>借款年利率 <span class="val"><span id="v_lr"></span> %</span></label><input type="range" id="lr" min="1" max="6" step="0.1" value="2.5"></div>
+          <div class="ctl"><label>維持率追繳門檻 <span class="val"><span id="v_mt"></span> %</span></label><input type="range" id="mt" min="120" max="180" step="5" value="130"></div>
+          <div class="ctl"><label>追繳後回補目標 <span class="val"><span id="v_st"></span> %</span></label><input type="range" id="st" min="150" max="220" step="5" value="166"></div>
+          <div class="ctl"><label>強平摩擦成本 <span class="val"><span id="v_hc"></span> %</span></label><input type="range" id="hc" min="0" max="8" step="0.5" value="3"></div>
+        </div>
+      </details>
+
+      <details class="grp"><summary>市場假設 <span class="chev">▶</span></summary>
+        <div class="grpbody">
+          <div class="ctl"><label>年報酬（算術平均） <span class="val"><span id="v_rm"></span> %</span></label><input type="range" id="rm" min="0" max="12" step="0.5" value="7"></div>
+          <div class="ctl"><label>年化波動 <span class="val"><span id="v_rv"></span> %</span></label><input type="range" id="rv" min="5" max="35" step="1" value="16"></div>
+          <div class="ctl"><label>崩盤年機率 <span class="val"><span id="v_cp"></span> %</span></label><input type="range" id="cp" min="0" max="20" step="1" value="8"></div>
+          <div class="ctl"><label>崩盤衝擊深度 <span class="val"><span id="v_cmin"></span>–<span id="v_cmax"></span> %</span></label>
+            <input type="range" id="cmin" min="10" max="40" step="5" value="25"><input type="range" id="cmax" min="40" max="70" step="5" value="50"></div>
+          <div class="ctl"><label>通膨（平均） <span class="val"><span id="v_im"></span> %</span></label><input type="range" id="im" min="0" max="6" step="0.5" value="2"></div>
+        </div>
+      </details>
+
+      <details class="grp"><summary>模擬設定 <span class="chev">▶</span></summary>
+        <div class="grpbody">
+          <div class="ctl"><label>模擬路徑數 <span class="val"><span id="v_np"></span></span></label><input type="range" id="np" min="1000" max="20000" step="1000" value="5000"></div>
+          <div class="ctl"><label>隨機種子 <span class="val"><span id="v_seed"></span></span></label><input type="range" id="seed" min="1" max="9999" step="1" value="1234"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results" id="results">
+      <div class="headline">
+        <div class="kpi surv"><div class="k">存活率（撐到期望壽命）</div><div class="v"><span id="k_surv">–</span><small>%</small></div><div class="note" id="k_survnote"></div></div>
+        <div class="kpi bank"><div class="k">破產機率</div><div class="v"><span id="k_bank">–</span><small>%</small></div><div class="note">資產淨值歸零的路徑占比</div></div>
+        <div class="kpi"><div class="k">破產路徑中位年齡</div><div class="v"><span id="k_medage">–</span><small>歲</small></div><div class="note" id="k_mednote">失敗路徑通常在此年齡耗盡</div></div>
+      </div>
+
+      <div class="card">
+        <h3>淨資產軌跡扇形圖</h3>
+        <p class="cap">數千條路徑的淨值分布。中線是中位數,色帶由內而外是 P25–P75 與 P10–P90。破產路徑之後計為 0,所以低分位越早貼地,代表越多路徑提早耗盡。</p>
+        <canvas id="fan" height="300"></canvas>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--band1)"></i>P10–P90</span>
+          <span><i class="sw" style="background:var(--band2)"></i>P25–P75</span>
+          <span><i class="sw" style="background:var(--median)"></i>中位數 P50</span>
+          <span><i class="sw" style="background:var(--faint)"></i>淨值 = 0</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>破產觸發變數分布</h3>
+        <p class="cap">失敗路徑中,「最先擊穿」的原因。margin 強平占比高,代表槓桿是主要死因——這正是單薪＋集中持股最該防的。</p>
+        <canvas id="trig" height="150"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>逐齡累積破產機率</h3>
+        <p class="cap">到每個年齡為止,已經破產的路徑占比。曲線越早陡升,代表風險越集中在退休前期。</p>
+        <canvas id="cum" height="200"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>模型自檢</h3>
+        <p class="cap">每次重算時,模型會跑三組合理性檢查驗證自己沒算錯:</p>
+        <div class="checks" id="checks"></div>
+      </div>
+
+      <div class="card">
+        <p class="disc">此工具將你的判斷與假設結構化,<b style="color:var(--muted)">不是投資建議,也不預測市場</b>。所有數字取決於你輸入的假設(報酬、波動、開銷),假設錯了結果就會錯。崩盤模型為簡化的機率衝擊,非真實歷史序列。台灣勞保/勞退年金、二代健保、稅務未納入,請自行加計或諮詢收費制 CFP。預設參數採用先前對帳分析的真實數字:淨資產約 860 萬、年開銷雙段 85→60 萬。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================== SIMULATION CORE (與 Node 驗證版一致) ==================
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeGauss(rand){let spare=null;return function(){if(spare!==null){const s=spare;spare=null;return s;}let u,v,s;do{u=rand()*2-1;v=rand()*2-1;s=u*u+v*v;}while(s>=1||s===0);const m=Math.sqrt(-2*Math.log(s)/s);spare=v*m;return u*m;};}
+function simulate(p){
+  const rand=mulberry32(p.seed>>>0),gauss=makeGauss(rand);
+  const ages=[];for(let a=p.currentAge;a<=p.lifeExp;a++)ages.push(a);
+  const nAge=ages.length,N=p.numPaths;
+  const netByAge=[];for(let i=0;i<nAge;i++)netByAge.push(new Float64Array(N));
+  const bankCount=new Float64Array(nAge);
+  const triggers={margin:0,crash:0,spending:0,inflation:0};
+  const bankAges=[];let survivors=0;
+  for(let path=0;path<N;path++){
+    let stock=p.stock0,loan=p.loan0,infIdx=1;
+    if(p.prepayOn){stock-=p.prepayAmt;if(stock<0){loan+=-stock;stock=0;}}
+    const infHist=[1];let alive=true,bankAge=null;
+    for(let i=0;i<nAge;i++){
+      const age=ages[i];
+      if(!alive){netByAge[i][path]=0;if(age>=bankAge)bankCount[i]++;continue;}
+      let baseReal;
+      if(p.spendMode==='rate'&&!p.prepayOn){baseReal=(p.stock0-p.loan0)*p.withdrawalRate;}
+      else{const s2=p.prepayOn||age>=p.switchAge;baseReal=s2?p.stage2:p.stage1;}
+      const spendNom=baseReal*infIdx;
+      let incNom=0;
+      if(age<p.retireAge)incNom+=p.salary*infIdx;
+      if(p.spouseOn&&age<p.spouseUntil)incNom+=p.spouseIncome*infIdx;
+      let need=spendNom-incNom;
+      loan+=loan*p.loanRate;
+      let shortfall=false;
+      if(need>0){
+        if(p.gapStrategy==='borrow'){loan+=need;}
+        else{if(stock>=need){stock-=need;}else{shortfall=true;}}
+      }else if(need<0){const sur=-need,pay=Math.min(sur,loan);loan-=pay;stock+=(sur-pay);}
+      if(shortfall){alive=false;bankAge=age;triggers.spending++;bankAges.push(age);netByAge[i][path]=0;bankCount[i]++;continue;}
+      let annualR=p.retMean+p.retVol*gauss();
+      if(rand()<p.crashProb){annualR+=-(p.crashMin+rand()*(p.crashMax-p.crashMin));}
+      const extraDip=0.6*p.retVol*Math.abs(gauss());
+      const troughR=Math.min(annualR,annualR-extraDip);
+      let stockTrough=Math.max(0,stock*(1+troughR));
+      let marginTriggered=false;
+      if(loan>0&&stockTrough/loan<p.maintThresh){
+        marginTriggered=true;
+        const denom=1-p.safeTarget*(1-p.haircut);
+        let x=(stockTrough-p.safeTarget*loan)/denom;if(!(x>0))x=0;
+        if(x>=stockTrough){
+          const proceeds=stockTrough*(1-p.haircut);loan-=proceeds;stock=0;
+          if(loan>0.0001){alive=false;bankAge=age;triggers.margin++;bankAges.push(age);netByAge[i][path]=0;bankCount[i]++;continue;}
+        }else{const f=x/stockTrough;loan-=x*(1-p.haircut);stock=stock*(1-f);}
+      }
+      stock=Math.max(0,stock*(1+annualR));
+      const net=stock-loan;
+      if(net<=0){
+        alive=false;bankAge=age;
+        if(marginTriggered)triggers.margin++;
+        else if(annualR<-0.20)triggers.crash++;
+        else if(i>=5&&infIdx/infHist[i-5]>1.3)triggers.inflation++;
+        else triggers.spending++;
+        bankAges.push(age);netByAge[i][path]=0;bankCount[i]++;continue;
+      }
+      netByAge[i][path]=net;
+      let infDraw=p.infMean+p.infVol*gauss();if(infDraw<-0.02)infDraw=-0.02;
+      infIdx*=(1+infDraw);infHist.push(infIdx);
+    }
+    if(alive)survivors++;
+  }
+  const fan=[],tmp=new Float64Array(N);
+  for(let i=0;i<nAge;i++){
+    tmp.set(netByAge[i]);Array.prototype.sort.call(tmp,(a,b)=>a-b);
+    const q=k=>tmp[Math.min(N-1,Math.floor(k*N))];
+    fan.push({age:ages[i],p10:q(.10),p25:q(.25),p50:q(.50),p75:q(.75),p90:q(.90)});
+  }
+  const cum=[];for(let i=0;i<nAge;i++)cum.push({age:ages[i],prob:bankCount[i]/N});
+  bankAges.sort((a,b)=>a-b);
+  const med=bankAges.length?bankAges[Math.floor(bankAges.length/2)]:null;
+  return{survival:survivors/N,bankruptProb:1-survivors/N,medianBankruptAge:med,triggers,fan,cum,ages};
+}
+
+// ================== UI WIRING ==================
+const $=id=>document.getElementById(id);
+const W=1e4; // 萬 -> 元
+let spendMode='twoStage', gapStrategy='sell';
+
+function readParams(){
+  return {
+    stock0:+$('stock').value*W, loan0:+$('loan').value*W,
+    currentAge:+$('age').value, lifeExp:+$('life').value, retireAge:+$('ret').value,
+    spendMode, stage1:+$('s1').value*W, stage2:+$('s2').value*W, switchAge:+$('sw').value,
+    withdrawalRate:+$('wr').value/100, salary:+$('sal').value*W,
+    spouseOn:$('spouse').checked, spouseIncome:+$('sp').value*W, spouseUntil:+$('spu').value,
+    retMean:+$('rm').value/100, retVol:+$('rv').value/100,
+    infMean:+$('im').value/100, infVol:0.01,
+    crashProb:+$('cp').value/100, crashMin:+$('cmin').value/100, crashMax:+$('cmax').value/100,
+    loanRate:+$('lr').value/100, maintThresh:+$('mt').value/100, safeTarget:+$('st').value/100, haircut:+$('hc').value/100,
+    gapStrategy, prepayOn:$('prepay').checked, prepayAmt:+$('pp').value*W,
+    numPaths:+$('np').value, seed:+$('seed').value
+  };
+}
+function syncLabels(){
+  const m={v_stock:'stock',v_loan:'loan',v_age:'age',v_life:'life',v_ret:'ret',v_s1:'s1',v_s2:'s2',v_sw:'sw',
+    v_wr:'wr',v_sal:'sal',v_sp:'sp',v_spu:'spu',v_rm:'rm',v_rv:'rv',v_cp:'cp',v_cmin:'cmin',v_cmax:'cmax',
+    v_im:'im',v_lr:'lr',v_mt:'mt',v_st:'st',v_hc:'hc',v_np:'np',v_seed:'seed'};
+  for(const k in m)$(k).textContent=$(m[k]).value;
+  $('twostage').style.display=spendMode==='twoStage'?'':'none';
+  $('ratebox').style.display=spendMode==='rate'?'':'none';
+  $('spousebox').style.display=$('spouse').checked?'':'none';
+  $('prepaybox').style.display=$('prepay').checked?'':'none';
+}
+const fmtPct=x=>(x*100).toFixed(1);
+const trigLabels={margin:'margin 追繳／強平',crash:'崩盤年直接擊穿',spending:'開銷侵蝕（慢性耗盡）',inflation:'通膨惡化'};
+const trigColors={margin:'#fb7185',crash:'#fbbf24',spending:'#38bdf8',inflation:'#a78bfa'};
+
+let lastResult=null;
+function run(){
+  const p=readParams();
+  const r=simulate(p);lastResult=r;
+  $('k_surv').textContent=fmtPct(r.survival);
+  $('k_bank').textContent=fmtPct(r.bankruptProb);
+  $('k_medage').textContent=r.medianBankruptAge??'—';
+  $('k_survnote').textContent = r.survival<0.5 ? '低於五成:此假設下難以支撐' : (r.survival<0.8?'中等:仍有可觀失敗機率':'較穩健,但仍非保證');
+  drawFan(r);drawTrig(r);drawCum(r);runChecks(p);
+}
+
+// -------- canvas helpers --------
+function setup(cv,h){
+  const dpr=window.devicePixelRatio||1;const w=cv.clientWidth;cv.height=h;
+  cv.width=w*dpr;cv.style.height=h+'px';const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  return{ctx,w,h};
+}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+function drawFan(r){
+  const cv=$('fan');const{ctx,w,h}=setup(cv,300);
+  const padL=52,padR=12,padT=12,padB=26;const iw=w-padL-padR,ih=h-padT-padB;
+  const ages=r.fan.map(f=>f.age);const a0=ages[0],a1=ages[ages.length-1];
+  let ymax=0;r.fan.forEach(f=>{ymax=Math.max(ymax,f.p90);});ymax=Math.max(ymax,r.fan[0].p50)/W;
+  ymax=Math.max(ymax*1.08,100);
+  const X=a=>padL+(a-a0)/(a1-a0)*iw;
+  const Y=v=>padT+ih-(v/ymax)*ih; // v in 萬
+  // grid
+  ctx.strokeStyle=css('--border');ctx.fillStyle=css('--muted');ctx.font='11px var(--mono)';ctx.lineWidth=1;
+  const steps=5;for(let i=0;i<=steps;i++){const gv=ymax*i/steps;const y=Y(gv);
+    ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();ctx.globalAlpha=1;
+    ctx.fillText(Math.round(gv).toLocaleString(),6,y+3);}
+  // x labels
+  ctx.textAlign='center';for(let a=Math.ceil(a0/10)*10;a<=a1;a+=10){ctx.fillText(a,X(a),h-8);}ctx.textAlign='left';
+  // band builder
+  function band(lo,hi,color){ctx.beginPath();
+    r.fan.forEach((f,i)=>{const x=X(f.age),y=Y(f[hi]/W);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    for(let i=r.fan.length-1;i>=0;i--){const f=r.fan[i];ctx.lineTo(X(f.age),Y(f[lo]/W));}
+    ctx.closePath();ctx.fillStyle=color;ctx.fill();}
+  band('p10','p90',css('--band1'));band('p25','p75',css('--band2'));
+  // zero line
+  ctx.strokeStyle=css('--faint');ctx.globalAlpha=.7;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(padL,Y(0));ctx.lineTo(w-padR,Y(0));ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+  // median
+  ctx.strokeStyle=css('--median');ctx.lineWidth=2;ctx.beginPath();
+  r.fan.forEach((f,i)=>{const x=X(f.age),y=Y(f.p50/W);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+  ctx.fillStyle=css('--muted');ctx.fillText('淨值（萬）',6,10);
+}
+function drawTrig(r){
+  const cv=$('trig');const{ctx,w,h}=setup(cv,150);
+  const keys=['margin','crash','spending','inflation'];
+  const total=keys.reduce((s,k)=>s+r.triggers[k],0)||1;
+  const padL=110,padR=48,barH=22,gap=10,top=8;
+  ctx.font='12px var(--sans)';
+  keys.forEach((k,i)=>{
+    const y=top+i*(barH+gap);const val=r.triggers[k];const frac=val/total;
+    ctx.fillStyle=css('--muted');ctx.textAlign='right';ctx.fillText(trigLabels[k],padL-10,y+barH/2+4);
+    ctx.textAlign='left';
+    ctx.fillStyle=css('--panel2');ctx.fillRect(padL,y,w-padL-padR,barH);
+    ctx.fillStyle=trigColors[k];ctx.fillRect(padL,y,(w-padL-padR)*frac,barH);
+    ctx.fillStyle=css('--ink');ctx.font='11px var(--mono)';
+    ctx.fillText((frac*100).toFixed(0)+'%',padL+(w-padL-padR)*frac+6,y+barH/2+4);
+    ctx.font='12px var(--sans)';
+  });
+}
+function drawCum(r){
+  const cv=$('cum');const{ctx,w,h}=setup(cv,200);
+  const padL=44,padR=12,padT=12,padB=26;const iw=w-padL-padR,ih=h-padT-padB;
+  const a0=r.cum[0].age,a1=r.cum[r.cum.length-1].age;
+  const X=a=>padL+(a-a0)/(a1-a0)*iw;const Y=v=>padT+ih-v*ih;
+  ctx.strokeStyle=css('--border');ctx.fillStyle=css('--muted');ctx.font='11px var(--mono)';
+  for(let i=0;i<=5;i++){const gv=i/5;const y=Y(gv);ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();ctx.globalAlpha=1;ctx.fillText((gv*100)+'%',6,y+3);}
+  ctx.textAlign='center';for(let a=Math.ceil(a0/10)*10;a<=a1;a+=10)ctx.fillText(a,X(a),h-8);ctx.textAlign='left';
+  ctx.strokeStyle=css('--bad');ctx.lineWidth=2;ctx.beginPath();
+  r.cum.forEach((c,i)=>{const x=X(c.age),y=Y(c.prob);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+  ctx.fillStyle='rgba(251,113,133,.10)';ctx.lineTo(X(a1),Y(0));ctx.lineTo(X(a0),Y(0));ctx.closePath();ctx.fill();
+}
+
+// -------- self checks --------
+function runChecks(p){
+  const base={...p,numPaths:2000};
+  const s60=simulate({...base,spendMode:'twoStage',stage1:60*W,stage2:60*W}).survival;
+  const s85=simulate({...base,spendMode:'twoStage',stage1:85*W,stage2:85*W}).survival;
+  const s110=simulate({...base,spendMode:'twoStage',stage1:110*W,stage2:110*W}).survival;
+  const c1=s60>=s85&&s85>=s110;
+  const noSp=simulate({...base,spouseOn:false}).survival;
+  const sp=simulate({...base,spouseOn:true,spouseIncome:50*W,spouseUntil:60}).survival;
+  const c2=sp>=noSp;
+  const det=simulate({...base,retMean:0,retVol:0,infMean:0,infVol:0,crashProb:0,loan0:0,prepayOn:false,spendMode:'twoStage',numPaths:1});
+  const expDeplete=det.medianBankruptAge!=null;
+  const c3=expDeplete;
+  const items=[
+    [c1,`開銷單調性:60/85/110 萬對應存活率 <b>${fmtPct(s60)}% ≥ ${fmtPct(s85)}% ≥ ${fmtPct(s110)}%</b>(開銷越高越難存活)`],
+    [c2,`配偶收入:加入後存活率由 <b>${fmtPct(noSp)}% → ${fmtPct(sp)}%</b>(收入應提升存活)`],
+    [c3,`確定性耗盡:0 報酬、0 通膨、無槓桿下,資產於 <b>${det.medianBankruptAge??'—'} 歲</b>耗盡(可對照 淨值÷年開銷 推估)`]
+  ];
+  $('checks').innerHTML=items.map(([ok,txt])=>
+    `<div class="chk"><span class="dot ${ok?'ok':'no'}">${ok?'✓':'✕'}</span><span>${txt}</span></div>`).join('');
+}
+
+// -------- events --------
+let t=null;
+function schedule(){clearTimeout(t);$('results').classList.add('busy');t=setTimeout(()=>{run();$('results').classList.remove('busy');},220);}
+document.querySelectorAll('input[type=range]').forEach(el=>el.addEventListener('input',()=>{syncLabels();schedule();}));
+document.querySelectorAll('input[type=checkbox]').forEach(el=>el.addEventListener('change',()=>{syncLabels();schedule();}));
+$('spendmode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;spendMode=b.dataset.v;
+  $('spendmode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));syncLabels();schedule();});
+$('gap').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;gapStrategy=b.dataset.v;
+  $('gap').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));schedule();});
+$('theme').addEventListener('click',()=>{
+  const cur=document.documentElement.getAttribute('data-theme');
+  const next=cur==='light'?'':'light';
+  if(next)document.documentElement.setAttribute('data-theme','light');else document.documentElement.removeAttribute('data-theme');
+  $('theme').textContent=next==='light'?'🌙 深色':'☀ 淺色';
+  if(lastResult){drawFan(lastResult);drawTrig(lastResult);drawCum(lastResult);}
+});
+window.addEventListener('resize',()=>{if(lastResult){drawFan(lastResult);drawTrig(lastResult);drawCum(lastResult);}});
+
+syncLabels();run();
+</script>
+</body>
+</html>
